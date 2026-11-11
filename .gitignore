@@ -1,0 +1,32 @@
+# secrets
+.env
+*.env
+!.env.example
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# runtime data
+backend/storage/*
+!backend/storage/.gitkeep
+
+# third-party data with its own licence, and local tool settings
+backend/sample_data/kaggle_*.csv
+.claude/
+
+# flutter
+*.apk
+mobile/build/
+mobile/.dart_tool/
+mobile/.flutter-plugins*
+
+# os / ide
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
