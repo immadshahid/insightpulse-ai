@@ -11,10 +11,18 @@ backend/  Python 3.12 + FastAPI: all analysis, charting, ML and AI
 
 ## Run it
 
-1. Double-click `Start InsightPulse Server.bat` and keep the window open. It shows the
-   address for a phone on the same Wi-Fi. Data is kept in `backend/storage`.
-2. Install `InsightPulse.apk` on the phone (build it with the commands below; it isn't kept in git). If the address differs from the one built in,
-   tap **Server address** on the sign-in screen and enter the one from the window.
+The server runs in Docker (PostgreSQL + the API), so nothing else needs installing on
+Windows and it is not affected by Smart App Control.
+
+1. Install Docker Desktop and open it.
+2. Double-click `Start InsightPulse Server.bat`. The first start builds the image (10+
+   minutes); after that the server starts with Docker Desktop. The window shows the address
+   for a phone on the same Wi-Fi. `Stop InsightPulse Server.bat` stops it; data is kept.
+3. Optional: double-click `Set Claude API Key.bat` to turn on the AI agents. The key is
+   checked, then stored only in the gitignored `.env`.
+4. Install `InsightPulse.apk` on the phone (build it with the commands below; it isn't kept
+   in git). If the address differs from the one built in, tap **Server address** on the
+   sign-in screen and enter the one from the window.
 
 ## Status
 
@@ -200,7 +208,7 @@ Every dataset/chart/job query is scoped to the logged-in user. Another user's id
 
 ## AI layer (backend/app/ai)
 
-Set `ANTHROPIC_API_KEY` (and optionally `LLM_MODEL`, default `claude-opus-5-5`) to turn it on.
+Set `ANTHROPIC_API_KEY` (and optionally `LLM_MODEL`, default `claude-haiku-5-5`) to turn it on.
 Without a key everything else works: mapping uses heuristics, summaries and narratives use
 template text, recommendations are rule-based, and `/chat` returns 503.
 

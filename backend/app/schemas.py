@@ -209,7 +209,7 @@ class ChatIn(BaseModel):
 class AgentStepOut(BaseModel):
     """One thing the agents did to reach an answer."""
 
-    agent: Literal["knowledge", "sql", "csv"]
+    agent: Literal["knowledge", "sql", "csv", "calculator"]
     summary: str
     detail: str = ""
 

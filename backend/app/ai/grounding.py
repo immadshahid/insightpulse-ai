@@ -21,7 +21,7 @@ def numbers_in_text(text: str) -> list[tuple[float, str]]:
     """(value, raw token) for each number written in ``text``."""
     out = []
     for match in _NUM_RE.finditer(text):
-        raw = match.group(0).strip()
+        raw = match.group(0).strip().rstrip(",")  # "30, 2017": the comma ends the number
         token = raw.replace(",", "").replace(" ", "")
         suffix = token[-1].lower() if token[-1].lower() in "kmb%" else ""
         core = token[:-1] if suffix else token

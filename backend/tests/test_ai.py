@@ -353,3 +353,14 @@ def test_anthropic_bad_responses_raise(text: str, stop: str) -> None:
 def test_disabled_llm() -> None:
     with pytest.raises(LLMUnavailableError):
         DisabledLLM().complete_json(task="t")
+
+
+def test_haiku_requests_send_no_fallbacks() -> None:
+    """Claude Haiku 5.5 has no server-side fallback; the parameter must not be sent."""
+    llm = AnthropicLLM("claude-haiku-5-5", api_key="test", client=object())
+    p = llm.request_params(
+        system="s", user="u", schema={"type": "object"}, effort="low", max_tokens=10
+    )
+    assert p["model"] == "claude-haiku-5-5"
+    assert "fallbacks" not in p and "betas" not in p
+    assert not {"temperature", "top_p", "top_k", "thinking"} & set(p)

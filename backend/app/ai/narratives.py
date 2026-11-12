@@ -19,11 +19,12 @@ from app.insights.base import Insight
 
 log = logging.getLogger(__name__)
 
-STYLE = """Write for a busy small-business owner in Pakistan: plain words, no jargon,
-no emoji, no markdown. Use ONLY facts and numbers present in the JSON you are given;
-never estimate, invent or recompute a number. Round money compactly (e.g. PKR 1.2M,
-PKR 45K) and percentages to whole numbers or one decimal. If the JSON does not support
-a claim, leave it out."""
+STYLE = """Write for a busy small-business owner: plain words, no jargon, no emoji, no
+markdown. Use ONLY facts and numbers present in the JSON you are given; never estimate,
+invent or recompute a number. Round money compactly (e.g. 1.2M, 45K) and percentages to
+whole numbers or one decimal. Put a currency code before amounts only when the data names
+one, and use exactly that code; never assume a currency. If the JSON does not support a
+claim, leave it out."""
 
 NARRATIVE_SYSTEM = f"""You explain analytics findings. For each insight, write 2-3
 sentences: what happened, why it matters, and (if the data supports it) what to watch.

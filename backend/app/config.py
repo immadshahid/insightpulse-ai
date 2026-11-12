@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     # AI layer (Phase 3)
     anthropic_api_key: str = ""
-    llm_model: str = "claude-opus-5-5"
+    llm_model: str = "claude-haiku-5-5"
     # None = auto (on when ANTHROPIC_API_KEY is set). Set true to use another credential
     # source the SDK understands (e.g. ANTHROPIC_AUTH_TOKEN or an `ant auth login` profile).
     llm_enabled: bool | None = None

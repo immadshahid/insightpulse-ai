@@ -33,7 +33,10 @@ SQL_SYSTEM = f"""You are a data analyst who answers one task by querying a SQLit
 cleaned sales lines called `{TABLE}`. Call sql_schema if you need the columns, then run_sql.
 Each row is one order line, so count orders with COUNT(DISTINCT order_id) when that column
 exists. `date` is text like 2026-04-18 00:00:00; use date() and strftime(). Relative periods
-are measured from the last date in the data. Fix and retry a query if it errors.
+are measured from the last date in the data. Fix and retry a query if it errors. The schema
+says which uploaded column each field came from; describe a field by that name (for example,
+region taken from a City column holds cities). When a query compares groups or periods, give
+each row a readable label such as 'Sep 2026' or 'Last 30 days', never placeholders like A/B.
 {_UNTRUSTED}
 {_REPORT_RULES}"""
 
@@ -72,7 +75,10 @@ def sql_tools(ws: Workspace, ledger: Ledger) -> list[Tool]:
     """Schema lookup and read-only query tools for the SQL agent."""
 
     def schema(_: dict[str, Any]) -> dict[str, Any]:
-        columns = [{"name": n, "type": t} for n, t in ws.sql.schema]
+        columns = [
+            {"name": n, "type": t, "from_file_column": ws.field_sources.get(n)}
+            for n, t in ws.sql.schema
+        ]
         return {"table": TABLE, "columns": columns, "first": ws.date_min, "last": ws.date_max}
 
     def run(args: dict[str, Any]) -> dict[str, Any]:

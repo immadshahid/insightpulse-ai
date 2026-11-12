@@ -29,9 +29,11 @@ Roles:
 - date: when the order/sale happened
 - revenue: money received for the row (a total/amount, not a unit price or discount)
 - quantity: number of units
-- product: product or item name/category
+- product: the product or item a person would recognise. Prefer a readable name column over a
+  product code or SKU column
 - customer: a stable customer identifier (prefer an ID column over a name column)
-- region: city, region, branch or store
+- region: where the sale happened. Pick the most specific location column: a city or branch
+  over a region, state or country
 - order_id: order / invoice / transaction identifier
 Use each column at most once. Use null when no column fits a role.
 Give a confidence from 0 to 1 for each role you assign."""

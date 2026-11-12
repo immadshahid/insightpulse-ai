@@ -1,12 +1,12 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-insightpulse}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-insightpulse}
       POSTGRES_DB: ${POSTGRES_DB:-insightpulse}
-    ports:
-      - "5432:5432"
+    # No host port: only the backend container talks to the database.
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -17,6 +17,7 @@ services:
 
   backend:
     build: ./backend
+    restart: unless-stopped
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-insightpulse}:${POSTGRES_PASSWORD:-insightpulse}@postgres:5432/${POSTGRES_DB:-insightpulse}

@@ -263,7 +263,11 @@ def test_invented_number_gets_one_repair(ws, clean_df) -> None:
 
 
 def test_repeatedly_invented_number_fails(ws) -> None:
-    llm = team(answer_json("Revenue was 123,456,789."), answer_json("Still 987,654,321."))
+    llm = team(
+        answer_json("Revenue was 123,456,789."),
+        answer_json("Still 987,654,321."),
+        answer_json("Now 555,444,333."),
+    )
     with pytest.raises(AgentError):
         ask_agentic(llm, ws, kb_for(ws), "Total?")
 
@@ -371,3 +375,16 @@ def test_chat_api_falls_back_when_agents_fail(client, auth_headers, uploaded) ->
     r = post_chat(client, auth_headers, uploaded, llm)
     assert r.status_code == 200, r.text
     assert r.json()["source"] in ("llm", "template") and r.json()["steps"] == []
+
+
+def test_agents_are_told_which_file_column_each_field_came_from(ws, pipeline_result) -> None:
+    from app.ai.agents.specialists import sql_tools
+    from app.ai.agents.workspace import Ledger
+
+    original = pipeline_result.mapping.model_dump()["region"]
+    assert ws.field_sources["region"] == original
+    columns = sql_tools(ws, Ledger())[0].run({})["columns"]
+    assert {"name": "region", "from_file_column": original} == {
+        k: v for k, v in next(c for c in columns if c["name"] == "region").items() if k != "type"
+    }
+    assert f"region = file column '{original}'" in ws.describe_fields()

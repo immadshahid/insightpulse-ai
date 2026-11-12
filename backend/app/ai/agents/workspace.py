@@ -157,6 +157,15 @@ class Workspace:
     currency: str | None
     date_min: str
     date_max: str
+    # Cleaned field -> the uploaded column it came from, e.g. {"region": "City"}.
+    field_sources: dict[str, str] = field(default_factory=dict)
+
+    def describe_fields(self) -> str:
+        """One line naming the original column behind each cleaned field."""
+        return ", ".join(f"{k} = file column '{v}'" for k, v in self.field_sources.items())
+
+
+_ROLES = ("date", "revenue", "quantity", "product", "customer", "region", "order_id")
 
 
 def build_workspace(
@@ -174,6 +183,9 @@ def build_workspace(
         currency=currency,
         date_min=str(clean["date"].min().date()),
         date_max=str(clean["date"].max().date()),
+        field_sources={
+            r: str(mapping[r]) for r in _ROLES if isinstance(mapping.get(r), str) and r in clean
+        },
     )
 
 
