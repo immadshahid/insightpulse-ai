@@ -203,6 +203,7 @@ Future<void> pumpApp(
   MemoryPrefs? prefs,
   double textScale = 1,
   Sharer? sharer,
+  FileSharer? fileSharer,
   GoogleAuth google = const GoogleAuthUnavailable(),
 }) async {
   tester.view.physicalSize = const Size(1170, 2532); // phone, 390 x 844 logical
@@ -218,6 +219,7 @@ Future<void> pumpApp(
         prefsProvider.overrideWithValue(prefs ?? MemoryPrefs({'onboarded': '1'})),
         sharerProvider.overrideWithValue(sharer ?? (text, {subject}) async {}),
         googleAuthProvider.overrideWithValue(google),
+      fileSharerProvider.overrideWithValue(fileSharer ?? (bytes, name, {mimeType = ''}) async {}),
         tokenStoreProvider.overrideWithValue(
           loggedIn ? MemoryTokenStore(token: 't', email: 'ayesha.khan@example.com') : MemoryTokenStore(),
         ),

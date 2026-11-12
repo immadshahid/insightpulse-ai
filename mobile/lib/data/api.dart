@@ -79,6 +79,14 @@ class InsightPulseApi {
     return [for (final s in j['segments'] as List) CustomerSegment.fromJson(s as Map<String, dynamic>)];
   }
 
+  // ------------------------------------------------------------ reports
+  Future<ReportMonths> reportMonths(String datasetId) async =>
+      ReportMonths.fromJson(await _http.get('/datasets/$datasetId/report/months') as Map<String, dynamic>);
+
+  /// The monthly PDF report as bytes.
+  Future<Uint8List> monthlyReport(String datasetId, String month) =>
+      _http.getBytes('/datasets/$datasetId/report', query: {'month': month});
+
   // ------------------------------------------------------------ AI
   Future<ChatReply> chat(String datasetId, String message, List<Map<String, String>> history) async =>
       ChatReply.fromJson(await _http.post('/datasets/$datasetId/chat', data: {'message': message, 'history': history}));

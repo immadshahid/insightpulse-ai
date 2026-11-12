@@ -508,6 +508,22 @@ class ChatReply {
   final String? how;
 }
 
+/// Months a PDF report can be made for (newest first) and the suggested one.
+class ReportMonths {
+  ReportMonths({required this.months, required this.defaultMonth});
+
+  factory ReportMonths.fromJson(Map<String, dynamic> j) => ReportMonths(
+        months: [
+          for (final m in (j['months'] as List? ?? const []))
+            (month: (m as Map)['month'] as String, label: m['label'] as String),
+        ],
+        defaultMonth: j['default'] as String,
+      );
+
+  final List<({String month, String label})> months;
+  final String defaultMonth;
+}
+
 class Recommendation {
   Recommendation({required this.title, required this.detail, required this.impact});
 

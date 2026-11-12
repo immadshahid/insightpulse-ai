@@ -14,6 +14,7 @@ import '../widgets/dataset_gate.dart';
 import '../widgets/motion.dart';
 import '../widgets/visuals.dart';
 import 'customers_screen.dart';
+import 'report_screen.dart';
 
 const periods = [('7d', '7D'), ('30d', '30D'), ('90d', '90D'), ('1y', '1Y')];
 
@@ -23,62 +24,56 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(authProvider);
-    final t = Theme.of(context).textTheme;
-    final p = context.palette;
     return Scaffold(
-      body: SafeArea(
-        child: DatasetGate(
-          builder: (context, dataset) {
-            final period = ref.watch(periodProvider);
-            final key = (datasetId: dataset.id, period: period);
-            final dash = ref.watch(dashboardProvider(key));
-            return RefreshIndicator(
-              onRefresh: () async {
-                ref.invalidate(dashboardProvider(key));
-                ref.invalidate(recommendationsProvider(dataset.id));
-              },
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-                children: [
-                  Row(children: [
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(greeting(DateTime.now()), style: t.bodyMedium?.copyWith(color: p.muted)),
-                        Text(session?.firstName ?? '', style: t.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-                      ]),
-                    ),
-                    const _AccountMenu(),
-                  ]),
-                  const SizedBox(height: 12),
-                  const Align(alignment: Alignment.centerLeft, child: DatasetChip()),
-                  if (dataset.dateMax != null) ...[
-                    const SizedBox(height: 6),
-                    _Freshness(dataset: dataset),
-                  ],
-                  const SizedBox(height: 14),
-                  SegmentedButton<String>(
-                    showSelectedIcon: false,
-                    segments: [for (final (v, l) in periods) ButtonSegment(value: v, label: Text(l))],
-                    selected: {period},
-                    onSelectionChanged: (s) {
-                      HapticFeedback.selectionClick();
-                      ref.read(periodProvider.notifier).set(s.first);
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  ...dash.when(
+      body: DatasetGate(
+        builder: (context, dataset) {
+          final period = ref.watch(periodProvider);
+          final key = (datasetId: dataset.id, period: period);
+          final dash = ref.watch(dashboardProvider(key));
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(dashboardProvider(key));
+              ref.invalidate(recommendationsProvider(dataset.id));
+            },
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 32),
+              children: [
+                _HomeHero(
+                  name: session?.firstName ?? '',
+                  dataset: dataset,
+                  period: period,
+                  onPeriod: (v) {
+                    HapticFeedback.selectionClick();
+                    ref.read(periodProvider.notifier).set(v);
+                  },
+                  summary: dash.when(
                     skipLoadingOnReload: true,
-                    loading: () => const [_DashboardSkeleton()],
-                    error: (e, _) => [
-                      SizedBox(height: 360, child: ErrorState(error: e, onRetry: () => ref.invalidate(dashboardProvider(key)))),
-                    ],
-                    data: (d) => _content(context, ref, d, dataset),
+                    loading: () => const _GlassSkeleton(),
+                    error: (_, _) => const SizedBox.shrink(),
+                    data: (d) => FadeSlideIn(child: _SummaryCard(dashboard: d)),
                   ),
-                ],
-              ),
-            );
-          },
-        ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: dash.when(
+                      skipLoadingOnReload: true,
+                      loading: () => const [_DashboardSkeleton()],
+                      error: (e, _) => [
+                        SizedBox(
+                          height: 360,
+                          child: ErrorState(error: e, onRetry: () => ref.invalidate(dashboardProvider(key))),
+                        ),
+                      ],
+                      data: (d) => _content(context, ref, d, dataset),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -87,8 +82,8 @@ class HomeScreen extends ConsumerWidget {
     final p = context.palette;
     final w = d.window;
     return [
-      FadeSlideIn(child: _SummaryCard(dashboard: d)),
-      const SizedBox(height: 18),
+      FadeSlideIn(child: _QuickActions(dataset: dataset)),
+      const SizedBox(height: 20),
       FadeSlideIn(
         index: 1,
         child: SectionTitle(
@@ -108,6 +103,8 @@ class HomeScreen extends ConsumerWidget {
       FadeSlideIn(index: 3, child: _GoalCard(dashboard: d)),
       const SizedBox(height: 12),
       FadeSlideIn(index: 3, child: _CustomersLink(dataset: dataset)),
+      const SizedBox(height: 12),
+      FadeSlideIn(index: 3, child: _ReportBanner(dataset: dataset)),
       const SizedBox(height: 16),
       if (d.trendChartUrl != null)
         FadeSlideIn(
@@ -293,8 +290,315 @@ class _CustomersLink extends StatelessWidget {
   }
 }
 
+/// Full-width gradient header: greeting, data freshness, period pills and the summary.
+class _HomeHero extends StatelessWidget {
+  const _HomeHero({
+    required this.name,
+    required this.dataset,
+    required this.period,
+    required this.onPeriod,
+    required this.summary,
+  });
+
+  final String name;
+  final DatasetSummary dataset;
+  final String period;
+  final ValueChanged<String> onPeriod;
+  final Widget summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final top = MediaQuery.paddingOf(context).top;
+    final soft = Colors.white.withValues(alpha: 0.82);
+    return Container(
+      decoration: BoxDecoration(
+        gradient: Brand.hero(Theme.of(context).brightness),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
+      ),
+      child: Stack(children: [
+        // Soft light shapes for depth.
+        Positioned(right: -60, top: -40, child: _Glow(size: 200)),
+        Positioned(left: -50, bottom: 60, child: _Glow(size: 140)),
+        Padding(
+          padding: EdgeInsets.fromLTRB(16, top + 10, 16, 18),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              _Avatar(name: name),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(greeting(DateTime.now()), style: t.bodyMedium?.copyWith(color: soft)),
+                  Text(
+                    name,
+                    overflow: TextOverflow.ellipsis,
+                    style: t.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+                  ),
+                ]),
+              ),
+              const _AccountMenu(color: Colors.white),
+            ]),
+            const SizedBox(height: 14),
+            const Align(alignment: Alignment.centerLeft, child: DatasetChip()),
+            if (dataset.dateMax != null) ...[
+              const SizedBox(height: 8),
+              _Freshness(dataset: dataset, color: soft),
+            ],
+            const SizedBox(height: 14),
+            _PeriodPills(selected: period, onSelected: onPeriod),
+            const SizedBox(height: 16),
+            summary,
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+class _Glow extends StatelessWidget {
+  const _Glow({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.07)),
+        ),
+      );
+}
+
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 46,
+        height: 46,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withValues(alpha: 0.2),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.45), width: 1.5),
+        ),
+        child: Text(
+          name.isEmpty ? '?' : name[0].toUpperCase(),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+        ),
+      );
+}
+
+/// Frosted period selector for the gradient header.
+class _PeriodPills extends StatelessWidget {
+  const _PeriodPills({required this.selected, required this.onSelected});
+
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+      ),
+      child: Row(children: [
+        for (final (v, l) in periods)
+          Expanded(
+            child: Semantics(
+              button: true,
+              selected: v == selected,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onSelected(v),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  constraints: const BoxConstraints(minHeight: kMinTouch - 4),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: v == selected ? Colors.white : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: v == selected
+                        ? [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 10, offset: const Offset(0, 3))]
+                        : null,
+                  ),
+                  child: Text(
+                    l,
+                    style: t.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: v == selected ? Brand.indigo : Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ]),
+    );
+  }
+}
+
+class _GlassSkeleton extends StatelessWidget {
+  const _GlassSkeleton();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 150,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(kRadius + 4),
+        ),
+      );
+}
+
+/// Colourful shortcuts to the most-used places.
+class _QuickActions extends StatelessWidget {
+  const _QuickActions({required this.dataset});
+
+  final DatasetSummary dataset;
+
+  @override
+  Widget build(BuildContext context) {
+    void push(Widget screen) {
+      HapticFeedback.selectionClick();
+      Navigator.of(context, rootNavigator: true).push(MaterialPageRoute<void>(builder: (_) => screen));
+    }
+
+    final actions = [
+      (Icons.auto_awesome, 'Ask AI', const [Color(0xFF6366F1), Color(0xFF8B5CF6)], () => context.go('/ask')),
+      (Icons.auto_graph_rounded, 'Forecast', const [Color(0xFF0EA5E9), Color(0xFF06B6D4)], () => context.go('/forecast')),
+      (
+        Icons.groups_rounded,
+        'Customers',
+        const [Color(0xFFEC4899), Color(0xFFF43F5E)],
+        () => push(CustomersScreen(datasetId: dataset.id, currency: dataset.currency)),
+      ),
+      (
+        Icons.picture_as_pdf_rounded,
+        'Report',
+        const [Color(0xFFF59E0B), Color(0xFFF97316)],
+        () => push(ReportScreen(datasetId: dataset.id, datasetName: dataset.name)),
+      ),
+    ];
+    final t = Theme.of(context).textTheme;
+    return Row(children: [
+      for (final (icon, label, colors, onTap) in actions)
+        Expanded(
+          child: Semantics(
+            button: true,
+            label: 'Open $label',
+            excludeSemantics: true,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(color: colors.last.withValues(alpha: 0.35), blurRadius: 14, offset: const Offset(0, 6)),
+                      ],
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 26),
+                  ),
+                  const SizedBox(height: 8),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(label, style: t.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ),
+    ]);
+  }
+}
+
+/// Eye-catching entry point for the monthly PDF.
+class _ReportBanner extends StatelessWidget {
+  const _ReportBanner({required this.dataset});
+
+  final DatasetSummary dataset;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    void open() {
+      HapticFeedback.selectionClick();
+      Navigator.of(context, rootNavigator: true).push(MaterialPageRoute<void>(
+        builder: (_) => ReportScreen(datasetId: dataset.id, datasetName: dataset.name),
+      ));
+    }
+
+    final radius = BorderRadius.circular(kRadius + 4);
+    // Gradient and shadow on a DecoratedBox, ripple on a transparent Material inside it,
+    // so the rounded corners stay clean.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF97316), Color(0xFFDB2777)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: radius,
+        boxShadow: [
+          BoxShadow(color: const Color(0xFFDB2777).withValues(alpha: 0.3), blurRadius: 18, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: radius,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: open,
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(Icons.picture_as_pdf_outlined, color: Colors.white, size: 28),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Monthly PDF report',
+                    style: t.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Text('Charts, data overview and forecast for any month',
+                    style: t.bodySmall?.copyWith(color: Colors.white.withValues(alpha: 0.9))),
+              ]),
+            ),
+            const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+          ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AccountMenu extends ConsumerWidget {
-  const _AccountMenu();
+  const _AccountMenu({this.color});
+
+  final Color? color;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -303,11 +607,13 @@ class _AccountMenu extends ConsumerWidget {
         (mode == ThemeMode.system && MediaQuery.platformBrightnessOf(context) == Brightness.dark);
     return Row(mainAxisSize: MainAxisSize.min, children: [
       IconButton(
+        color: color,
         tooltip: isDark ? 'Light mode' : 'Dark mode',
         icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
         onPressed: () => ref.read(themeModeProvider.notifier).set(isDark ? ThemeMode.light : ThemeMode.dark),
       ),
       IconButton(
+        color: color,
         tooltip: 'Sign out',
         icon: const Icon(Icons.logout_rounded),
         onPressed: () => ref.read(authProvider.notifier).logout(),
@@ -326,8 +632,14 @@ class _SummaryCard extends ConsumerWidget {
     final t = Theme.of(context).textTheme;
     const onAccent = Colors.white;
     final pending = dashboard.summaryStatus == 'pending';
-    return GradientCard(
-      padding: const EdgeInsets.fromLTRB(18, 14, 8, 10),
+    // Frosted glass card that sits on the gradient header.
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 14, 8, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(kRadius + 4),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
+      ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
@@ -387,22 +699,23 @@ class _SummaryCard extends ConsumerWidget {
 
 /// "Data through 31 Oct 2026 - 28.2K records".
 class _Freshness extends StatelessWidget {
-  const _Freshness({required this.dataset});
+  const _Freshness({required this.dataset, this.color});
 
   final DatasetSummary dataset;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
+    final c = color ?? context.palette.muted;
     final end = DateTime.tryParse(dataset.dateMax ?? '');
     if (end == null) return const SizedBox.shrink();
     return Row(children: [
-      Icon(Icons.update_rounded, size: 14, color: p.muted),
+      Icon(Icons.update_rounded, size: 14, color: c),
       const SizedBox(width: 4),
       Flexible(
         child: Text(
           'Data through ${shortDate(end)} \u00b7 ${compactNumber(dataset.rowCount)} records',
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(color: p.muted),
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(color: c),
         ),
       ),
     ]);
@@ -538,7 +851,20 @@ class _KpiTile extends StatelessWidget {
         excludeSemantics: true,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            IconBadge(icon: icons[kpi.key] ?? Icons.analytics_outlined, color: tint, size: 30),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [tint, Color.lerp(tint, Colors.white, 0.25)!],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [BoxShadow(color: tint.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3))],
+              ),
+              child: Icon(icons[kpi.key] ?? Icons.analytics_outlined, color: Colors.white, size: 18),
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: FittedBox(

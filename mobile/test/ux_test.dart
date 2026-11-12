@@ -37,7 +37,11 @@ void main() {
 
   testWidgets('tapping a KPI opens its details', (tester) async {
     await pumpApp(tester, defaultApi());
-    await tester.tap(find.text('PKR 10.6M'));
+    final tile = find.text('PKR 10.6M');
+    await tester.scrollUntilVisible(tile, 300);
+    await tester.ensureVisible(tile);
+    await settle(tester, frames: 3);
+    await tester.tap(tile);
     await settle(tester);
     expect(find.textContaining('Total money received'), findsOneWidget);
     expect(find.text('Previous period'), findsOneWidget);

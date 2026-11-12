@@ -218,7 +218,11 @@ final chartBytesProvider = FutureProvider.family<Uint8List, ChartKey>(
   (ref, key) => ref.watch(apiProvider).chartPng(key.url, dark: key.dark),
 );
 
-final churnProvider = FutureProvider.family<ChurnReport, String>((ref, id) => ref.watch(apiProvider).churn(id));
+final reportMonthsProvider = FutureProvider.autoDispose.family<ReportMonths, String>(
+  (ref, id) => ref.watch(apiProvider).reportMonths(id),
+);
+
+final churnProvider =FutureProvider.family<ChurnReport, String>((ref, id) => ref.watch(apiProvider).churn(id));
 
 final segmentsProvider = FutureProvider.family<List<CustomerSegment>, String>(
   (ref, id) => ref.watch(apiProvider).segments(id),

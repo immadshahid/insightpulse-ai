@@ -32,6 +32,7 @@ dependencies = [
     "anthropic>=1.0",
     "google-auth>=2.30",
     "requests>=2.31",
+    "reportlab>=4.2",
 ]
 
 [dependency-groups]
