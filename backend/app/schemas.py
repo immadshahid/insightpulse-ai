@@ -19,14 +19,21 @@ class RegisterIn(BaseModel):
     """New account credentials."""
 
     email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+    # Strength rules live in core.security.password_problem (plain-language errors).
+    password: str = Field(min_length=1, max_length=200)
 
 
 class LoginIn(BaseModel):
     """Login credentials."""
 
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1, max_length=200)
+
+
+class FirebaseLoginIn(BaseModel):
+    """A Firebase ID token from Google sign-in on the device."""
+
+    id_token: str = Field(min_length=20, max_length=8000)
 
 
 class UserOut(BaseModel):

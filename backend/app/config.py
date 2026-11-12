@@ -6,6 +6,8 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEV_JWT_SECRET = "dev-only-change-me"  # refused outside SQLite dev/test databases
+
 
 class Settings(BaseSettings):
     """Runtime configuration. Every field can be overridden by an env var of the same name."""
@@ -14,9 +16,11 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./storage/dev.db"
     storage_dir: str = "./storage"
-    jwt_secret: str = "dev-only-change-me"
+    jwt_secret: str = DEV_JWT_SECRET
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 7
+    # Firebase project id for Google sign-in; empty turns the endpoint off.
+    firebase_project_id: str = ""
     public_base_url: str = "http://localhost:8000"
     max_upload_mb: int = 25
     api_prefix: str = "/api/v1"

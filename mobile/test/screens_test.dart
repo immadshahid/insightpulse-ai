@@ -16,7 +16,7 @@ void main() {
     expect(find.text('Welcome back'), findsOneWidget);
     await tester.tap(find.text('Sign in'));
     await settle(tester);
-    expect(find.text('Enter a valid email'), findsOneWidget); // validation
+    expect(find.text('Enter your email'), findsOneWidget); // validation
 
     await tester.enterText(find.byType(TextFormField).at(0), 'ayesha.khan@example.com');
     await tester.enterText(find.byType(TextFormField).at(1), 'secret-pass');
@@ -29,8 +29,7 @@ void main() {
 
   testWidgets('login shows the server error message', (tester) async {
     final api = defaultApi();
-    when(() => api.login(any(), any()))
-        .thenThrow(ApiException('Incorrect email or password.', status: 401));
+    when(() => api.login(any(), any())).thenThrow(ApiException('Incorrect email or password.', status: 401));
     await pumpApp(tester, api, loggedIn: false);
     await tester.enterText(find.byType(TextFormField).at(0), 'a@example.com');
     await tester.enterText(find.byType(TextFormField).at(1), 'wrong');
@@ -106,20 +105,35 @@ void main() {
 
   testWidgets('Forecast shows the total, range, accuracy and what-if', (tester) async {
     final api = defaultApi();
-    when(() => api.startForecast(any(), any(), any())).thenAnswer((_) async => Job(
-          id: 'j1',
-          status: 'succeeded',
-          result: {
-            'target': 'revenue', 'target_label': 'Revenue', 'horizon_days': 90, 'model': 'prophet',
-            'total': 38.1e6, 'total_lower': 35.3e6, 'total_upper': 40.9e6,
-            'accuracy_note': 'Within ±9% on the last 4 months', 'change_pct': 22.7,
-            'chart_url': '/api/v1/charts/f.png', 'currency': 'PKR',
-          },
-        ));
-    when(() => api.whatIf(any(), any())).thenAnswer((_) async => WhatIfResult(
-          changePct: 10, unitsChangePct: -9.6, revenueChangePct: 0.1,
-          baselineRevenue: 1, scenarioRevenue: 1, notes: ['Assumes the same number of orders.'],
-        ));
+    when(() => api.startForecast(any(), any(), any())).thenAnswer(
+      (_) async => Job(
+        id: 'j1',
+        status: 'succeeded',
+        result: {
+          'target': 'revenue',
+          'target_label': 'Revenue',
+          'horizon_days': 90,
+          'model': 'prophet',
+          'total': 38.1e6,
+          'total_lower': 35.3e6,
+          'total_upper': 40.9e6,
+          'accuracy_note': 'Within ±9% on the last 4 months',
+          'change_pct': 22.7,
+          'chart_url': '/api/v1/charts/f.png',
+          'currency': 'PKR',
+        },
+      ),
+    );
+    when(() => api.whatIf(any(), any())).thenAnswer(
+      (_) async => WhatIfResult(
+        changePct: 10,
+        unitsChangePct: -9.6,
+        revenueChangePct: 0.1,
+        baselineRevenue: 1,
+        scenarioRevenue: 1,
+        notes: ['Assumes the same number of orders.'],
+      ),
+    );
     await pumpApp(tester, api);
     await tester.tap(find.text('Forecast').last);
     await settle(tester);
@@ -145,13 +159,15 @@ void main() {
 
   testWidgets('Ask AI: question, answer with chart, how-I-got-this and follow-ups', (tester) async {
     final api = defaultApi();
-    when(() => api.chat(any(), any(), any())).thenAnswer((_) async => ChatReply(
-          answer: 'Lawn Suit 3pc sold the most: PKR 1.8M.',
-          followUps: ['Which city grew fastest?'],
-          answerable: true,
-          chartUrl: '/api/v1/charts/c.png',
-          how: 'Summed revenue by product for 1 Oct 2026 - 31 Oct 2026.',
-        ));
+    when(() => api.chat(any(), any(), any())).thenAnswer(
+      (_) async => ChatReply(
+        answer: 'Lawn Suit 3pc sold the most: PKR 1.8M.',
+        followUps: ['Which city grew fastest?'],
+        answerable: true,
+        chartUrl: '/api/v1/charts/c.png',
+        how: 'Summed revenue by product for 1 Oct 2026 - 31 Oct 2026.',
+      ),
+    );
     await pumpApp(tester, api);
     await tester.tap(find.text('Ask AI').last);
     await settle(tester);

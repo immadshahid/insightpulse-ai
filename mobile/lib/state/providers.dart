@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/api_client.dart';
+import '../core/google_auth.dart';
 import '../core/prefs.dart';
 import '../data/api.dart';
 import '../data/models.dart';
@@ -15,6 +16,9 @@ final tokenStoreProvider = Provider<TokenStore>((ref) => MemoryTokenStore());
 
 /// Overridden in main() (shared preferences) and in tests (memory).
 final prefsProvider = Provider<Prefs>((ref) => MemoryPrefs());
+
+/// Overridden in main() with Firebase when the app was built with Firebase settings.
+final googleAuthProvider = Provider<GoogleAuth>((ref) => const GoogleAuthUnavailable());
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   final client = ApiClient(ref.watch(tokenStoreProvider));
@@ -59,12 +63,25 @@ class AuthController extends Notifier<Session?> {
   Future<void> register(String email, String password) async =>
       _finish(await ref.read(apiProvider).register(email.trim(), password));
 
+  /// Google sign-in; false if the user backed out of the account chooser.
+  Future<bool> loginWithGoogle() async {
+    final idToken = await ref.read(googleAuthProvider).signIn();
+    if (idToken == null) return false;
+    await _finish(await ref.read(apiProvider).loginWithFirebase(idToken));
+    return true;
+  }
+
   Future<void> _finish(AuthResult r) async {
     await ref.read(tokenStoreProvider).save(r.token, r.email);
     state = Session(r.email);
   }
 
   Future<void> logout() async {
+    try {
+      await ref.read(googleAuthProvider).signOut();
+    } catch (_) {
+      // Signing out of Google is best effort; the app session ends regardless.
+    }
     await ref.read(tokenStoreProvider).clear();
     ref.read(selectedDatasetIdProvider.notifier).select(null);
     state = null;
@@ -76,8 +93,8 @@ final authProvider = NotifierProvider<AuthController, Session?>(AuthController.n
 // ---------------------------------------------------------------- preferences
 class ThemeModeController extends Notifier<ThemeMode> {
   @override
-  ThemeMode build() => ThemeMode.values.asNameMap()[ref.watch(prefsProvider).getString(PrefKeys.themeMode)] ??
-      ThemeMode.system;
+  ThemeMode build() =>
+      ThemeMode.values.asNameMap()[ref.watch(prefsProvider).getString(PrefKeys.themeMode)] ?? ThemeMode.system;
 
   void set(ThemeMode mode) {
     state = mode;
@@ -121,8 +138,7 @@ class SelectedDatasetController extends Notifier<String?> {
   }
 }
 
-final selectedDatasetIdProvider =
-    NotifierProvider<SelectedDatasetController, String?>(SelectedDatasetController.new);
+final selectedDatasetIdProvider = NotifierProvider<SelectedDatasetController, String?>(SelectedDatasetController.new);
 
 /// The dataset the screens show: the user's choice, else the newest ready one.
 final currentDatasetProvider = Provider<DatasetSummary?>((ref) {
@@ -138,7 +154,8 @@ final currentDatasetProvider = Provider<DatasetSummary?>((ref) {
 });
 
 final profileProvider = FutureProvider.autoDispose.family<DatasetProfile, String>(
-    (ref, id) => ref.watch(apiProvider).profile(id));
+  (ref, id) => ref.watch(apiProvider).profile(id),
+);
 
 /// Re-fetch every [every] while [pending] is true (background jobs still running).
 void _pollWhile(Ref ref, bool pending, {Duration every = const Duration(seconds: 3)}) {
@@ -150,8 +167,7 @@ void _pollWhile(Ref ref, bool pending, {Duration every = const Duration(seconds:
 // ---------------------------------------------------------------- dashboard & insights
 typedef DashboardKey = ({String datasetId, String period});
 
-final dashboardProvider =
-    FutureProvider.autoDispose.family<Dashboard, DashboardKey>((ref, key) async {
+final dashboardProvider = FutureProvider.autoDispose.family<Dashboard, DashboardKey>((ref, key) async {
   final d = await ref.watch(apiProvider).dashboard(key.datasetId, key.period);
   _pollWhile(ref, d.isPending);
   return d;
@@ -159,22 +175,21 @@ final dashboardProvider =
 
 typedef InsightsKey = ({String datasetId, String? category});
 
-final insightsProvider =
-    FutureProvider.autoDispose.family<InsightFeed, InsightsKey>((ref, key) async {
+final insightsProvider = FutureProvider.autoDispose.family<InsightFeed, InsightsKey>((ref, key) async {
   final feed = await ref.watch(apiProvider).insights(key.datasetId, category: key.category);
   _pollWhile(ref, feed.isPending, every: const Duration(seconds: 4));
   return feed;
 });
 
 final recommendationsProvider = FutureProvider.autoDispose.family<List<Recommendation>, String>(
-    (ref, id) => ref.watch(apiProvider).recommendations(id));
+  (ref, id) => ref.watch(apiProvider).recommendations(id),
+);
 
 // ---------------------------------------------------------------- forecast
 typedef ForecastKey = ({String datasetId, String target, int horizonDays});
 
 /// Starts (or reuses) the forecast job and polls it until it finishes.
-final forecastProvider =
-    FutureProvider.autoDispose.family<ForecastResult, ForecastKey>((ref, key) async {
+final forecastProvider = FutureProvider.autoDispose.family<ForecastResult, ForecastKey>((ref, key) async {
   final api = ref.watch(apiProvider);
   var job = await api.startForecast(key.datasetId, key.target, key.horizonDays);
   final deadline = DateTime.now().add(const Duration(minutes: 3));
@@ -192,28 +207,29 @@ final forecastProvider =
 typedef WhatIfKey = ({String datasetId, int changePct});
 
 final whatIfProvider = FutureProvider.autoDispose.family<WhatIfResult, WhatIfKey>(
-    (ref, key) => ref.watch(apiProvider).whatIf(key.datasetId, key.changePct.toDouble()));
+  (ref, key) => ref.watch(apiProvider).whatIf(key.datasetId, key.changePct.toDouble()),
+);
 
 // ---------------------------------------------------------------- charts
 typedef ChartKey = ({String url, bool dark});
 
 /// Chart PNG bytes (fetched with the auth header; kept while the app runs).
 final chartBytesProvider = FutureProvider.family<Uint8List, ChartKey>(
-    (ref, key) => ref.watch(apiProvider).chartPng(key.url, dark: key.dark));
+  (ref, key) => ref.watch(apiProvider).chartPng(key.url, dark: key.dark),
+);
 
 final churnProvider = FutureProvider.family<ChurnReport, String>((ref, id) => ref.watch(apiProvider).churn(id));
 
-final segmentsProvider =
-    FutureProvider.family<List<CustomerSegment>, String>((ref, id) => ref.watch(apiProvider).segments(id));
+final segmentsProvider = FutureProvider.family<List<CustomerSegment>, String>(
+  (ref, id) => ref.watch(apiProvider).segments(id),
+);
 
 /// Revenue goal per dashboard period, kept on this device.
 class GoalsController extends Notifier<Map<String, double>> {
   @override
   Map<String, double> build() {
     final prefs = ref.watch(prefsProvider);
-    return {
-      for (final p in validPeriods) p: ?double.tryParse(prefs.getString(PrefKeys.goal(p)) ?? ''),
-    };
+    return {for (final p in validPeriods) p: ?double.tryParse(prefs.getString(PrefKeys.goal(p)) ?? '')};
   }
 
   void set(String period, double? goal) {
@@ -232,27 +248,10 @@ final goalsProvider = NotifierProvider<GoalsController, Map<String, double>>(Goa
 
 // ---------------------------------------------------------------- Ask AI
 class ChatEntry {
-  const ChatEntry.user(this.text)
-      : fromUser = true,
-        reply = null,
-        error = null,
-        pending = false;
-  const ChatEntry.ai(this.reply)
-      : fromUser = false,
-        text = '',
-        error = null,
-        pending = false;
-  const ChatEntry.pending()
-      : fromUser = false,
-        text = '',
-        reply = null,
-        error = null,
-        pending = true;
-  const ChatEntry.error(this.error)
-      : fromUser = false,
-        text = '',
-        reply = null,
-        pending = false;
+  const ChatEntry.user(this.text) : fromUser = true, reply = null, error = null, pending = false;
+  const ChatEntry.ai(this.reply) : fromUser = false, text = '', error = null, pending = false;
+  const ChatEntry.pending() : fromUser = false, text = '', reply = null, error = null, pending = true;
+  const ChatEntry.error(this.error) : fromUser = false, text = '', reply = null, pending = false;
 
   final bool fromUser;
   final String text;
@@ -290,7 +289,7 @@ class ChatController extends Notifier<List<ChatEntry>> {
       if (!ref.mounted) return;
       final msg = e.isUnavailable
           ? 'Ask AI is not switched on for this server yet. An administrator needs to add '
-              'an AI key (ANTHROPIC_API_KEY).'
+                'an AI key (ANTHROPIC_API_KEY).'
           : e.message;
       state = [...state.sublist(0, state.length - 1), ChatEntry.error(msg)];
     }

@@ -63,6 +63,15 @@ def client() -> TestClient:
         yield c
 
 
+@pytest.fixture(autouse=True)
+def _fresh_sign_in_limits() -> None:
+    """Each test starts with no recorded sign-in attempts."""
+    from app.api import auth
+
+    for limiter in (auth.LOGIN_FAILURES, auth.IP_FAILURES, auth.SIGNUPS):
+        limiter.clear()
+
+
 def _register(client: TestClient, email: str) -> dict[str, str]:
     r = client.post("/api/v1/auth/register", json={"email": email, "password": "s3cret-pass"})
     assert r.status_code == 201, r.text

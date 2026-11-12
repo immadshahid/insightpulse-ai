@@ -21,6 +21,7 @@ backend/sample_data/kaggle_*.csv
 
 # flutter
 *.apk
+mobile/firebase.json
 mobile/build/
 mobile/.dart_tool/
 mobile/.flutter-plugins*

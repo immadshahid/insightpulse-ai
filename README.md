@@ -143,6 +143,40 @@ uv run ruff check . && uv run black --check .
 
 Tests use SQLite and a temp storage folder, so no Docker or Postgres is needed.
 
+On Windows with Smart App Control on, Python and Flutter's test runner are blocked; run
+them in Docker instead:
+
+```bash
+docker run --rm -v "$PWD/backend:/src" -w /src -e PYTHONPATH=/src insightpulse-backend sh -c "uv sync --frozen --no-install-project -q && pytest -q"
+docker build -t insightpulse-flutter:3.47.9 mobile/tool/docker
+docker run --rm -v "$PWD/mobile:/src:ro" insightpulse-flutter:3.47.9 sh /src/tool/docker/test.sh
+```
+
+## Sign-in
+
+- Email and password: at least 8 characters with a letter and a number (checked in the
+  app and on the server). 10 wrong passwords for an account, or 30 failed sign-ins from
+  one address, lock sign-in for 15 minutes.
+- **Continue with Google** (Firebase): the app signs in with Google through Firebase and
+  sends the Firebase ID token to `POST /api/v1/auth/firebase`; the server checks it with
+  Google's public keys, requires a verified email, and signs the user in to the account
+  with that email (creating it if new). No service-account key is needed.
+
+To turn Google sign-in on:
+
+1. In the [Firebase console](https://console.firebase.google.com), create a project, open
+   **Authentication > Sign-in method** and enable **Google**.
+2. Add an **Android app** with package `com.insightpulse.insightpulse` and the SHA-1 of
+   the key that signs your APK (`keytool -list -v -keystore ~/.android/debug.keystore
+   -alias androiddebugkey -storepass android`).
+3. Copy `mobile/firebase.example.json` to `mobile/firebase.json` and fill it in from the
+   project settings (API key, app id, project id, sender id) and the **Web client ID**
+   shown under Authentication > Sign-in method > Google > Web SDK configuration.
+4. Add `FIREBASE_PROJECT_ID=<project id>` to `.env` and restart the server.
+5. Build the app with `--dart-define-from-file=firebase.json`.
+
+Without these settings the Google button is hidden and the endpoint answers 503.
+
 ## Try the API
 
 ```bash

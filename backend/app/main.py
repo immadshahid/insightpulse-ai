@@ -12,7 +12,7 @@ from fastapi.responses import RedirectResponse
 
 from app import models  # noqa: F401  (register ORM tables)
 from app.api.router import api_router
-from app.config import get_settings
+from app.config import DEV_JWT_SECRET, get_settings
 from app.db import Base, get_engine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -29,6 +29,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     """Build the FastAPI app."""
     settings = get_settings()
+    if settings.jwt_secret == DEV_JWT_SECRET and not settings.database_url.startswith("sqlite"):
+        raise RuntimeError("Set JWT_SECRET to a long random value before running on a real DB.")
     app = FastAPI(title="InsightPulse AI API", version="0.1.0", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]

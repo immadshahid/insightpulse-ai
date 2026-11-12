@@ -18,11 +18,11 @@ def test_root_redirects_to_docs(client: TestClient) -> None:
 
 
 def test_register_login_flow(client: TestClient) -> None:
-    body = {"email": "Flow@Example.com", "password": "another-pass"}
+    body = {"email": "Flow@Example.com", "password": "another-pass-1"}
     assert client.post(f"{API}/auth/register", json=body).status_code == 201
     assert client.post(f"{API}/auth/register", json=body).status_code == 409
     r = client.post(
-        f"{API}/auth/login", json={"email": "flow@example.com", "password": "another-pass"}
+        f"{API}/auth/login", json={"email": "flow@example.com", "password": "another-pass-1"}
     )
     assert r.status_code == 200 and r.json()["user"]["email"] == "flow@example.com"
     bad = client.post(

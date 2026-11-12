@@ -139,7 +139,16 @@ class _DataScreenState extends ConsumerState<DataScreen> {
     final current = ref.watch(currentDatasetProvider);
     if (_editedFor != null && _editedFor != current?.id) _edited = null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Data'), actions: const [Padding(padding: EdgeInsets.only(right: 12), child: DatasetChip())]),
+      appBar: AppBar(title: const Text('Data'), actions: [
+        const DatasetChip(),
+        // Also here, so a new account with no data yet can still sign out.
+        IconButton(
+          tooltip: 'Sign out',
+          icon: const Icon(Icons.logout_rounded),
+          onPressed: () => ref.read(authProvider.notifier).logout(),
+        ),
+        const SizedBox(width: 4),
+      ]),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(datasetsProvider);
