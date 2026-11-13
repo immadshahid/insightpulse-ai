@@ -194,52 +194,65 @@ def _callout(text: str) -> Table:
     return table
 
 
+def draw_cover(canvas, band_h: float, kicker: str, title: str, subtitle: str, note: str) -> None:
+    """The indigo-to-violet band across the top of the first page."""
+    canvas.saveState()
+    steps = 40
+    for i in range(steps):
+        t = i / (steps - 1)
+        canvas.setFillColorRGB(
+            INDIGO.red + (VIOLET.red - INDIGO.red) * t,
+            INDIGO.green + (VIOLET.green - INDIGO.green) * t,
+            INDIGO.blue + (VIOLET.blue - INDIGO.blue) * t,
+        )
+        canvas.rect(PAGE_W * i / steps, PAGE_H - band_h, PAGE_W / steps + 1, band_h, 0, 1)
+    canvas.setFillColorRGB(1, 1, 1, alpha=0.08)
+    canvas.circle(PAGE_W - 2.2 * cm, PAGE_H - 1.0 * cm, 3.2 * cm, 0, 1)
+    canvas.setFillColor(colors.white)
+    canvas.setFont(SANS, 10)
+    canvas.drawString(MARGIN, PAGE_H - 1.6 * cm, kicker)
+    canvas.setFont(BOLD, 26)
+    canvas.drawString(MARGIN, PAGE_H - 2.9 * cm, title[:40])
+    canvas.setFont(SANS, 11)
+    canvas.drawString(MARGIN, PAGE_H - 3.8 * cm, subtitle[:90])
+    canvas.setFont(SANS, 8.5)
+    canvas.drawString(MARGIN, PAGE_H - 4.5 * cm, note)
+    canvas.restoreState()
+
+
+def draw_footer(canvas, doc, text: str) -> None:
+    """Thin rule, a label and the page number."""
+    canvas.saveState()
+    canvas.setStrokeColor(BORDER)
+    canvas.line(MARGIN, 1.3 * cm, PAGE_W - MARGIN, 1.3 * cm)
+    canvas.setFont(SANS, 8)
+    canvas.setFillColor(MUTED)
+    canvas.drawString(MARGIN, 0.85 * cm, text)
+    canvas.drawRightString(PAGE_W - MARGIN, 0.85 * cm, f"Page {doc.page}")
+    canvas.restoreState()
+
+
 def render_pdf(report: MonthlyReport) -> bytes:
     """The finished PDF as bytes."""
     buf = io.BytesIO()
     generated = datetime.now(UTC).strftime("%d %b %Y")
     band_h = 5.2 * cm
 
+    footer_text = f"InsightPulse AI  ·  {report.dataset_name}  ·  {report.month_label}"
+
     def first_page(canvas, doc) -> None:
-        canvas.saveState()
-        steps = 40  # horizontal indigo-to-violet gradient band
-        for i in range(steps):
-            t = i / (steps - 1)
-            canvas.setFillColorRGB(
-                INDIGO.red + (VIOLET.red - INDIGO.red) * t,
-                INDIGO.green + (VIOLET.green - INDIGO.green) * t,
-                INDIGO.blue + (VIOLET.blue - INDIGO.blue) * t,
-            )
-            canvas.rect(PAGE_W * i / steps, PAGE_H - band_h, PAGE_W / steps + 1, band_h, 0, 1)
-        canvas.setFillColorRGB(1, 1, 1, alpha=0.08)
-        canvas.circle(PAGE_W - 2.2 * cm, PAGE_H - 1.0 * cm, 3.2 * cm, 0, 1)
-        canvas.setFillColor(colors.white)
-        canvas.setFont(SANS, 10)
-        canvas.drawString(MARGIN, PAGE_H - 1.6 * cm, "INSIGHTPULSE AI  ·  MONTHLY REPORT")
-        canvas.setFont(BOLD, 26)
-        canvas.drawString(MARGIN, PAGE_H - 2.9 * cm, report.month_label)
-        canvas.setFont(SANS, 11)
-        canvas.drawString(
-            MARGIN,
-            PAGE_H - 3.8 * cm,
+        draw_cover(
+            canvas,
+            band_h,
+            "INSIGHTPULSE AI  ·  MONTHLY REPORT",
+            report.month_label,
             f"{report.dataset_name}  ·  {report.first_day} to {report.last_day}",
+            f"Generated {generated}",
         )
-        canvas.setFont(SANS, 8.5)
-        canvas.drawString(MARGIN, PAGE_H - 4.5 * cm, f"Generated {generated}")
-        canvas.restoreState()
-        footer(canvas, doc)
+        draw_footer(canvas, doc, footer_text)
 
     def footer(canvas, doc) -> None:
-        canvas.saveState()
-        canvas.setStrokeColor(BORDER)
-        canvas.line(MARGIN, 1.3 * cm, PAGE_W - MARGIN, 1.3 * cm)
-        canvas.setFont(SANS, 8)
-        canvas.setFillColor(MUTED)
-        canvas.drawString(
-            MARGIN, 0.85 * cm, f"InsightPulse AI  ·  {report.dataset_name}  ·  {report.month_label}"
-        )
-        canvas.drawRightString(PAGE_W - MARGIN, 0.85 * cm, f"Page {doc.page}")
-        canvas.restoreState()
+        draw_footer(canvas, doc, footer_text)
 
     doc = SimpleDocTemplate(
         buf,

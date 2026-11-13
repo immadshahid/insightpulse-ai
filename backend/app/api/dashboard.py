@@ -10,7 +10,7 @@ from app.core import datasets as svc
 from app.core.jobs import JobRunner, find_or_create_job
 from app.core.storage import Storage
 from app.db import get_db
-from app.deps import get_job_runner, get_storage, require_ready
+from app.deps import get_job_runner, get_storage, require_ready, require_sales
 from app.insights.base import Category
 from app.insights.dashboard import (
     Period,
@@ -70,7 +70,7 @@ def ai_job(
 @router.get("/{dataset_id}/dashboard", response_model=DashboardOut)
 def get_dashboard(
     period: Period = Query("30d"),
-    dataset: Dataset = Depends(require_ready),
+    dataset: Dataset = Depends(require_sales),
     db: Session = Depends(get_db),
     storage: Storage = Depends(get_storage),
     runner: JobRunner = Depends(get_job_runner),

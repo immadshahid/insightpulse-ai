@@ -14,7 +14,10 @@ import '../widgets/dataset_gate.dart';
 import '../widgets/motion.dart';
 import '../widgets/visuals.dart';
 import 'customers_screen.dart';
+import 'insights_screen.dart';
 import 'report_screen.dart';
+
+part 'explore_view.dart';
 
 const periods = [('7d', '7D'), ('30d', '30D'), ('90d', '90D'), ('1y', '1Y')];
 
@@ -27,6 +30,7 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       body: DatasetGate(
         builder: (context, dataset) {
+          if (dataset.isGeneral) return _ExploreHome(dataset: dataset, name: session?.firstName ?? '');
           final period = ref.watch(periodProvider);
           final key = (datasetId: dataset.id, period: period);
           final dash = ref.watch(dashboardProvider(key));
@@ -488,6 +492,18 @@ class _QuickActions extends StatelessWidget {
         () => push(ReportScreen(datasetId: dataset.id, datasetName: dataset.name)),
       ),
     ];
+    return _ActionRow(actions: actions);
+  }
+}
+
+/// A row of gradient shortcut tiles.
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({required this.actions});
+
+  final List<(IconData, String, List<Color>, VoidCallback)> actions;
+
+  @override
+  Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return Row(children: [
       for (final (icon, label, colors, onTap) in actions)
@@ -540,7 +556,7 @@ class _ReportBanner extends StatelessWidget {
     void open() {
       HapticFeedback.selectionClick();
       Navigator.of(context, rootNavigator: true).push(MaterialPageRoute<void>(
-        builder: (_) => ReportScreen(datasetId: dataset.id, datasetName: dataset.name),
+        builder: (_) => ReportScreen(datasetId: dataset.id, datasetName: dataset.name, general: dataset.isGeneral),
       ));
     }
 
@@ -579,10 +595,13 @@ class _ReportBanner extends StatelessWidget {
             const SizedBox(width: 14),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Monthly PDF report',
+                Text(dataset.isGeneral ? 'PDF data report' : 'Monthly PDF report',
                     style: t.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 2),
-                Text('Charts, data overview and forecast for any month',
+                Text(
+                    dataset.isGeneral
+                        ? 'Full analysis, charts and findings in one PDF'
+                        : 'Charts, data overview and forecast for any month',
                     style: t.bodySmall?.copyWith(color: Colors.white.withValues(alpha: 0.9))),
               ]),
             ),

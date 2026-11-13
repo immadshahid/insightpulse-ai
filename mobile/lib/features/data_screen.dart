@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -43,6 +44,12 @@ class _DataScreenState extends ConsumerState<DataScreen> {
   bool _saving = false;
   String? _uploadError;
 
+  /// What the upload is doing now, and how much of the file has been sent (0..1).
+  String? _stage;
+  double? _progress;
+
+  static const _maxUploadBytes = 25 * 1024 * 1024; // the server's limit
+
   /// role -> column while the user is editing (null = no unsaved edits).
   Map<String, String?>? _edited;
   String? _editedFor;
@@ -53,7 +60,34 @@ class _DataScreenState extends ConsumerState<DataScreen> {
       allowedExtensions: const ['csv', 'xlsx', 'xls'],
     );
     if (file == null) return;
-    await _load(() async => ref.read(apiProvider).upload(await file.readAsBytes(), file.name));
+    setState(() => _stage = 'Opening your file...');
+    await _load(() async {
+      final bytes = await file.readAsBytes();
+      if (bytes.length > _maxUploadBytes) {
+        throw ApiException(
+          'That file is ${(bytes.length / 1048576).toStringAsFixed(1)} MB; the limit is 25 MB. '
+          'Export fewer months or remove columns you do not need.',
+        );
+      }
+      if (mounted) {
+        setState(() {
+          _stage = 'Sending file';
+          _progress = 0;
+        });
+      }
+      return ref.read(apiProvider).upload(bytes, file.name, onProgress: _onProgress);
+    });
+  }
+
+  void _onProgress(double fraction) {
+    if (!mounted) return;
+    final done = fraction >= 0.999;
+    // Repaint only on whole-percent steps.
+    if (!done && _progress != null && (fraction - _progress!).abs() < 0.01) return;
+    setState(() {
+      _progress = fraction.clamp(0, 1).toDouble();
+      if (done) _stage = 'Reading your data...';
+    });
   }
 
   Future<void> _importSheet() async {
@@ -74,9 +108,15 @@ class _DataScreenState extends ConsumerState<DataScreen> {
       ref.read(selectedDatasetIdProvider.notifier).select(profile.dataset.id);
       setState(() => _edited = null);
     } on ApiException catch (e) {
-      setState(() => _uploadError = e.message);
+      if (mounted) setState(() => _uploadError = e.message);
     } finally {
-      if (mounted) setState(() => _uploading = false);
+      if (mounted) {
+        setState(() {
+          _uploading = false;
+          _stage = null;
+          _progress = null;
+        });
+      }
     }
   }
 
@@ -103,8 +143,35 @@ class _DataScreenState extends ConsumerState<DataScreen> {
     }
   }
 
+  /// General data the user says is sales data: show the column roles to confirm.
+  bool _salesSetup = false;
+  String? _salesSetupFor;
+
+  Future<void> _switchKind(DatasetProfile profile, String kind) async {
+    HapticFeedback.selectionClick();
+    setState(() => _saving = true);
+    try {
+      await ref.read(apiProvider).setKind(profile.dataset.id, kind);
+      ref.invalidate(profileProvider(profile.dataset.id));
+      ref.invalidate(datasetsProvider);
+      setState(() {
+        _edited = null;
+        _salesSetup = false;
+      });
+      if (mounted) context.go('/home');
+    } on ApiException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _buildDashboard(DatasetProfile profile) async {
     final edits = _edited;
+    if (edits == null && profile.dataset.isGeneral && _salesSetup) {
+      // The suggested roles are already complete: just analyse it as sales data.
+      return _switchKind(profile, 'sales');
+    }
     if (edits != null) {
       setState(() => _saving = true);
       try {
@@ -138,6 +205,7 @@ class _DataScreenState extends ConsumerState<DataScreen> {
   Widget build(BuildContext context) {
     final current = ref.watch(currentDatasetProvider);
     if (_editedFor != null && _editedFor != current?.id) _edited = null;
+    if (_salesSetupFor != current?.id) _salesSetup = false;
     return Scaffold(
       appBar: AppBar(title: const Text('Data'), actions: [
         const DatasetChip(),
@@ -159,6 +227,8 @@ class _DataScreenState extends ConsumerState<DataScreen> {
           children: [
             _UploadCard(
               busy: _uploading,
+              stage: _stage,
+              progress: _progress,
               error: _uploadError,
               onPick: _pickAndUpload,
               onSample: () => _load(() => ref.read(apiProvider).loadSample()),
@@ -180,6 +250,12 @@ class _DataScreenState extends ConsumerState<DataScreen> {
                       onAssign: (column, role) => _assign(profile, column, role),
                       onBuild: () => _buildDashboard(profile),
                       onDelete: () => _delete(profile.dataset),
+                      salesSetup: _salesSetup,
+                      onGeneral: () => _switchKind(profile, 'general'),
+                      onSales: () => setState(() {
+                        _salesSetup = true;
+                        _salesSetupFor = profile.dataset.id;
+                      }),
                     ),
                   ),
             ],
@@ -191,9 +267,18 @@ class _DataScreenState extends ConsumerState<DataScreen> {
 }
 
 class _UploadCard extends StatelessWidget {
-  const _UploadCard({required this.busy, required this.error, required this.onPick, required this.onSample});
+  const _UploadCard({
+    required this.busy,
+    required this.error,
+    required this.onPick,
+    required this.onSample,
+    this.stage,
+    this.progress,
+  });
 
   final bool busy;
+  final String? stage;
+  final double? progress;
   final String? error;
   final VoidCallback onPick;
   final VoidCallback onSample;
@@ -226,9 +311,28 @@ class _UploadCard extends StatelessWidget {
             icon: busy
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2))
                 : const Icon(Icons.add_rounded),
-            label: Text(busy ? 'Reading your data...' : 'Choose file'),
+            label: Text(busy ? (stage ?? 'Reading your data...') : 'Choose file'),
           ),
         ),
+        if (busy && progress != null) ...[
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: progress! >= 0.999 ? null : progress,
+              minHeight: 8,
+              backgroundColor: p.border,
+              semanticsLabel: 'Upload progress',
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            progress! >= 0.999
+                ? 'File sent. Cleaning and checking your data...'
+                : 'Sending ${(progress! * 100).round()}% · keep the app open',
+            style: t.bodySmall?.copyWith(color: p.muted),
+          ),
+        ],
         const SizedBox(height: 4),
         SizedBox(
           width: double.infinity,
@@ -304,6 +408,63 @@ class _SheetDialogState extends State<_SheetDialog> {
       );
 }
 
+/// "Analyse as": sales data (business dashboard) or general data (EDA, Predict).
+class _KindCard extends StatelessWidget {
+  const _KindCard({
+    required this.general,
+    required this.salesSetup,
+    required this.busy,
+    required this.onGeneral,
+    required this.onSales,
+  });
+
+  final bool general;
+  final bool salesSetup;
+  final bool busy;
+  final VoidCallback onGeneral;
+  final VoidCallback onSales;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final t = Theme.of(context).textTheme;
+    final salesSelected = !general || salesSetup;
+    return AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text('Analyse as', style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(value: true, icon: Icon(Icons.storefront_rounded), label: Text('Sales data')),
+            ButtonSegment(value: false, icon: Icon(Icons.travel_explore_rounded), label: Text('General data')),
+          ],
+          selected: {salesSelected},
+          showSelectedIcon: false,
+          onSelectionChanged: busy
+              ? null
+              : (s) {
+                  if (s.first == salesSelected) return;
+                  if (s.first) {
+                    onSales();
+                  } else {
+                    onGeneral();
+                  }
+                },
+        ),
+        const SizedBox(height: 10),
+        Text(
+          salesSelected
+              ? 'Orders or transactions with a date and an amount: revenue dashboard, forecasts, '
+                  'customers and monthly reports.'
+              : 'Any table, like passengers, patients, students or survey answers: a full data '
+                  'analysis, findings, Predict a column and Ask AI.',
+          style: t.bodySmall?.copyWith(color: p.muted, height: 1.4),
+        ),
+      ]),
+    );
+  }
+}
+
 class _ProfileSection extends StatelessWidget {
   const _ProfileSection({
     required this.profile,
@@ -313,6 +474,9 @@ class _ProfileSection extends StatelessWidget {
     required this.onAssign,
     required this.onBuild,
     required this.onDelete,
+    required this.salesSetup,
+    required this.onGeneral,
+    required this.onSales,
   });
 
   final DatasetProfile profile;
@@ -322,16 +486,52 @@ class _ProfileSection extends StatelessWidget {
   final void Function(String column, String? role) onAssign;
   final VoidCallback onBuild;
   final VoidCallback onDelete;
+  final bool salesSetup;
+  final VoidCallback onGeneral;
+  final VoidCallback onSales;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final general = profile.dataset.isGeneral;
+    final kind = _KindCard(
+      general: general,
+      salesSetup: salesSetup,
+      busy: saving,
+      onGeneral: onGeneral,
+      onSales: onSales,
+    );
+    if (general && !salesSetup) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        kind,
+        if (profile.quality != null) ...[
+          const SizedBox(height: 20),
+          const SectionTitle('Data quality'),
+          _QualityCard(report: profile.quality!),
+        ],
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          onPressed: saving ? null : onBuild,
+          icon: const Icon(Icons.travel_explore_rounded),
+          label: const Text('Explore this data'),
+        ),
+        const SizedBox(height: 6),
+        TextButton.icon(
+          onPressed: saving ? null : onDelete,
+          style: TextButton.styleFrom(foregroundColor: p.negative),
+          icon: const Icon(Icons.delete_outline_rounded),
+          label: const Text('Delete this dataset'),
+        ),
+      ]);
+    }
     final t = Theme.of(context).textTheme;
     final roleByColumn = {for (final e in mapping.entries) if (e.value != null) e.value!: e.key};
     final missing = profile.requiredRoles.where((r) => mapping[r] == null).toList();
     final byAi = profile.mappingSource == 'llm' && !dirty;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      kind,
+      const SizedBox(height: 16),
       SectionTitle(byAi ? 'AI mapped your columns' : 'Your columns',
           trailing: byAi ? Pill('AI', icon: Icons.auto_awesome) : null),
       Text('Tap a role to change it. Date and revenue are required.',

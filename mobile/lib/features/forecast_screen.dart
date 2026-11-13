@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../core/brand.dart';
 import '../core/format.dart';
@@ -32,6 +33,16 @@ class _ForecastScreenState extends ConsumerState<ForecastScreen> {
           actions: const [Padding(padding: EdgeInsets.only(right: 12), child: DatasetChip())],
         ),
         body: DatasetGate(builder: (context, dataset) {
+          if (dataset.isGeneral) {
+            return EmptyState(
+              icon: Icons.psychology_alt_rounded,
+              title: 'Forecasts are for sales over time',
+              message: '"${dataset.name}" is analysed as general data. Use Predict on Home to see '
+                  'what drives any column, or switch the data type on the Data tab if this is sales data.',
+              action: 'Open Predict',
+              onAction: () => context.go('/home'),
+            );
+          }
           final hasUnits = ref.watch(profileProvider(dataset.id)).value?.mapping['quantity'] != null;
           final targets = [('revenue', 'Revenue'), ('orders', 'Orders'), if (hasUnits) ('quantity', 'Units sold')];
           if (!targets.any((t) => t.$1 == _target)) _target = 'revenue';

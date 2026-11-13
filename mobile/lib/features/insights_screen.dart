@@ -21,6 +21,14 @@ const _filters = [
   ('anomalies', 'Anomalies'),
 ];
 
+const _generalFilters = [
+  (null, 'All'),
+  ('target', 'Outcome'),
+  ('relationships', 'Relationships'),
+  ('distributions', 'Distributions'),
+  ('quality', 'Data quality'),
+];
+
 class InsightsScreen extends ConsumerStatefulWidget {
   const InsightsScreen({super.key});
 
@@ -38,7 +46,10 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
           actions: const [Padding(padding: EdgeInsets.only(right: 12), child: DatasetChip())],
         ),
         body: DatasetGate(builder: (context, dataset) {
-          final key = (datasetId: dataset.id, category: _category);
+          final filters = dataset.isGeneral ? _generalFilters : _filters;
+          // A filter picked for another kind of dataset falls back to All.
+          final category = filters.any((f) => f.$1 == _category) ? _category : null;
+          final key = (datasetId: dataset.id, category: category);
           final feed = ref.watch(insightsProvider(key));
           return Column(children: [
             SizedBox(
@@ -47,12 +58,12 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 children: [
-                  for (final (value, label) in _filters)
+                  for (final (value, label) in filters)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: ChoiceChip(
                         label: Text(label),
-                        selected: _category == value,
+                        selected: category == value,
                         showCheckmark: false,
                         onSelected: (_) {
                           HapticFeedback.selectionClick();

@@ -15,9 +15,11 @@ from app.core.jobs import latest_job
 from app.core.storage import Storage
 from app.db import get_db
 from app.deps import get_storage, require_ready
+from app.eda.predict import PredictError, predict_column
 from app.insights.base import month_label
 from app.ml.forecast import ForecastResult, forecast_chart_spec
 from app.models import Dataset
+from app.reports.data_pdf import render_data_pdf
 from app.reports.monthly import ReportError, available_months, build_report, default_month
 from app.reports.pdf import render_pdf
 
@@ -42,13 +44,44 @@ class ReportMonthsOut(BaseModel):
 def report_months(
     dataset: Dataset = Depends(require_ready), storage: Storage = Depends(get_storage)
 ) -> ReportMonthsOut:
-    """Months with data; the default is the latest complete month."""
+    """Months with data; the default is the latest complete month. General data has no
+    months: its report covers the whole table."""
+    if dataset.kind == "general":
+        return ReportMonthsOut(months=[], default="")
     df = svc.load_clean(storage, dataset)
     months = available_months(df)[::-1]
     return ReportMonthsOut(
         months=[ReportMonthOut(month=m, label=month_label(m)) for m in months],
         default=default_month(df),
     )
+
+
+def _pdf_response(pdf: bytes, name: str, suffix: str) -> Response:
+    safe = re.sub(r"[^A-Za-z0-9]+", "-", name).strip("-") or "data"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="InsightPulse-{safe}-{suffix}.pdf"'},
+    )
+
+
+def _data_report(dataset: Dataset, storage: Storage) -> Response:
+    ex = svc.exploration(storage, dataset)
+    prediction = None
+    if ex.target:
+        try:
+            df = svc.load_clean(storage, dataset)
+            prediction = predict_column(df, ex.target, svc.profile_kinds(dataset))
+        except PredictError:
+            prediction = None
+    pdf = render_data_pdf(
+        ex,
+        dataset_name=dataset.name,
+        filename=dataset.filename,
+        cleaning=dataset.cleaning,
+        prediction=prediction,
+    )
+    return _pdf_response(pdf, dataset.name, "data-report")
 
 
 @router.get(
@@ -63,7 +96,10 @@ def monthly_report(
     storage: Storage = Depends(get_storage),
     llm: LLMClient = Depends(get_llm),
 ) -> Response:
-    """A multi-page PDF for one month: KPIs, charts, data overview, findings, forecast."""
+    """A multi-page PDF for one month: KPIs, charts, data overview, findings, forecast.
+    For general data, a data report (EDA, findings, what drives the outcome column)."""
+    if dataset.kind == "general":
+        return _data_report(dataset, storage)
     df = svc.load_clean(storage, dataset)
     ctx = svc.context_for(dataset, df)
     insights = svc.dataset_insights(storage, dataset)
@@ -91,11 +127,4 @@ def monthly_report(
         )
     except ReportError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-    pdf = render_pdf(report)
-    safe = re.sub(r"[^A-Za-z0-9]+", "-", dataset.name).strip("-") or "data"
-    filename = f"InsightPulse-{safe}-{report.month}.pdf"
-    return Response(
-        content=pdf,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    return _pdf_response(render_pdf(report), dataset.name, report.month)

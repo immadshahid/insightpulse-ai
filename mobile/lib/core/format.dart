@@ -9,6 +9,9 @@ String compactNumber(num value) {
   return NumberFormat.decimalPattern().format(value.round());
 }
 
+/// 1234567 -> "1,234,567".
+String wholeNumber(num value) => NumberFormat.decimalPattern().format(value.round());
+
 String _trim(num v) {
   final s = v.toStringAsFixed(1);
   return s.endsWith('.0') ? s.substring(0, s.length - 2) : s;

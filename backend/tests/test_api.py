@@ -175,7 +175,8 @@ def test_needs_mapping_then_user_mapping(client: TestClient, auth_headers, raw_d
     assert r.status_code == 201
     body = r.json()
     ds_id = body["dataset"]["id"]
-    assert body["dataset"]["status"] == "needs_mapping"
+    # Without recognisable date/revenue columns the file is explored as general data.
+    assert body["dataset"]["status"] == "ready" and body["dataset"]["kind"] == "general"
     assert client.get(f"{API}/datasets/{ds_id}/dashboard", headers=auth_headers).status_code == 409
 
     bad = client.put(
@@ -198,6 +199,7 @@ def test_needs_mapping_then_user_mapping(client: TestClient, auth_headers, raw_d
     assert ok.status_code == 200, ok.text
     assert ok.json()["dataset"]["status"] == "ready"
     assert ok.json()["dataset"]["version"] == 2
+    assert ok.json()["dataset"]["kind"] == "sales"
     assert ok.json()["mapping"]["source"] == "user"
     assert client.get(f"{API}/datasets/{ds_id}/dashboard", headers=auth_headers).status_code == 200
 

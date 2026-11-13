@@ -142,7 +142,7 @@ void main() {
     final api = defaultApi();
     when(() => api.datasets()).thenAnswer((_) async => const []);
     await pumpApp(tester, api);
-    expect(find.text('Add your sales data'), findsOneWidget);
+    expect(find.text('Add your data'), findsOneWidget);
     await tester.tap(find.text('Data').last);
     await settle(tester);
     await tester.tap(find.byTooltip('Sign out'));

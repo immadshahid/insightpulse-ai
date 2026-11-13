@@ -26,6 +26,7 @@ class DatasetSummary {
     this.dateMin,
     this.dateMax,
     this.currency,
+    this.kind = 'sales',
   });
 
   factory DatasetSummary.fromJson(Map<String, dynamic> j) => DatasetSummary(
@@ -37,6 +38,7 @@ class DatasetSummary {
         dateMin: j['date_min'] as String?,
         dateMax: j['date_max'] as String?,
         currency: j['currency'] as String?,
+        kind: (j['kind'] as String?) ?? 'sales',
       );
 
   final String id;
@@ -47,8 +49,136 @@ class DatasetSummary {
   final String? dateMin;
   final String? dateMax;
   final String? currency;
+  final String kind;
 
   bool get isReady => status == 'ready';
+
+  /// Analysed as general data (any table): Explore and Predict instead of sales dashboards.
+  bool get isGeneral => kind == 'general';
+}
+
+/// One column of a general dataset, as Explore summarises it.
+class ExploreColumn {
+  ExploreColumn({
+    required this.name,
+    required this.kind,
+    required this.missingPct,
+    required this.unique,
+    required this.stats,
+    required this.topValues,
+  });
+
+  factory ExploreColumn.fromJson(Map<String, dynamic> j) => ExploreColumn(
+        name: j['name'] as String,
+        kind: j['kind'] as String,
+        missingPct: _d(j['missing_pct']),
+        unique: (j['unique'] as num).toInt(),
+        stats: [
+          for (final s in (j['stats'] as List? ?? const []))
+            (label: (s as Map)['label'] as String, value: s['value'] as String),
+        ],
+        topValues: [
+          for (final v in (j['top_values'] as List? ?? const []))
+            (value: '${(v as Map)['value']}', count: (v['count'] as num).toInt(), share: _d(v['share'])),
+        ],
+      );
+
+  final String name;
+  final String kind; // numeric | category | yes/no | date | text | id
+  final double missingPct;
+  final int unique;
+  final List<({String label, String value})> stats;
+  final List<({String value, int count, double share})> topValues;
+}
+
+/// Full EDA of a general dataset.
+class Exploration {
+  Exploration({
+    required this.overview,
+    required this.qualityScore,
+    required this.qualityLabel,
+    required this.columns,
+    required this.charts,
+    required this.insights,
+    required this.target,
+    required this.predictable,
+  });
+
+  factory Exploration.fromJson(Map<String, dynamic> j) {
+    final quality = _map(j['quality']);
+    return Exploration(
+      overview: _map(j['overview']),
+      qualityScore: (quality['score'] as num?)?.toInt(),
+      qualityLabel: quality['label'] as String?,
+      columns: _list(j['columns'], ExploreColumn.fromJson),
+      charts: [
+        for (final c in (j['charts'] as List? ?? const []))
+          (title: (c as Map)['title'] as String, caption: c['caption'] as String, url: c['url'] as String),
+      ],
+      insights: _list(j['insights'], Insight.fromJson),
+      target: j['target'] as String?,
+      predictable: ((j['predictable'] as List?) ?? const []).map((e) => '$e').toList(),
+    );
+  }
+
+  final Map<String, dynamic> overview;
+  final int? qualityScore;
+  final String? qualityLabel;
+  final List<ExploreColumn> columns;
+  final List<({String title, String caption, String url})> charts;
+  final List<Insight> insights;
+  final String? target;
+  final List<String> predictable;
+
+  int get rows => (overview['rows'] as num?)?.toInt() ?? 0;
+  int get columnCount => (overview['columns'] as num?)?.toInt() ?? columns.length;
+  double get missingPct => _d(overview['missing_cells_pct']);
+  double get completePct => _d(overview['complete_rows_pct']);
+}
+
+/// How well one column can be predicted from the others, and what drives it.
+class Prediction {
+  Prediction({
+    required this.target,
+    required this.task,
+    required this.metric,
+    required this.score,
+    required this.baseline,
+    required this.verdict,
+    required this.rowsUsed,
+    required this.features,
+    required this.excluded,
+    this.chartUrl,
+  });
+
+  factory Prediction.fromJson(Map<String, dynamic> j) => Prediction(
+        target: j['target'] as String,
+        task: j['task'] as String,
+        metric: j['metric'] as String,
+        score: _d(j['score']),
+        baseline: _d(j['baseline']),
+        verdict: j['verdict'] as String,
+        rowsUsed: (j['rows_used'] as num).toInt(),
+        features: [
+          for (final f in (j['features'] as List? ?? const []))
+            (column: (f as Map)['column'] as String, importance: _d(f['importance'])),
+        ],
+        excluded: ((j['excluded'] as List?) ?? const []).map((e) => '$e').toList(),
+        chartUrl: j['chart_url'] as String?,
+      );
+
+  final String target;
+  final String task; // classification | regression
+  final String metric;
+  final double score;
+  final double baseline;
+  final String verdict;
+  final int rowsUsed;
+  final List<({String column, double importance})> features;
+  final List<String> excluded;
+  final String? chartUrl;
+
+  bool get isClassification => task == 'classification';
 }
 
 class ColumnInfo {

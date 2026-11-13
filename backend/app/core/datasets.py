@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.core.lru import LRU
 from app.core.storage import Storage, load_parquet, save_parquet
+from app.eda.clean import clean_general
+from app.eda.explore import Exploration, explore
 from app.insights.base import ChartSpec, Insight, InsightContext
 from app.insights.engine import generate_insights
 from app.models import Chart, Dataset, Job, User, new_id
@@ -34,6 +36,28 @@ def _persist_clean(storage: Storage, dataset: Dataset, result: PipelineResult) -
     dataset.cleaning = result.cleaning.model_dump()
     dataset.quality = result.quality.model_dump()
     dataset.status = "ready"
+    dataset.kind = "sales"
+    dataset.error = None
+
+
+def _profile_kinds(dataset: Dataset) -> dict[str, str]:
+    return {str(c["name"]).strip(): c["kind"] for c in (dataset.profile or {}).get("columns", [])}
+
+
+def _make_general(
+    storage: Storage, dataset: Dataset, raw: pd.DataFrame, profile: DatasetProfile
+) -> None:
+    """Store a typed copy of any table and mark the dataset as general data."""
+    df, report = clean_general(raw, profile)
+    key = f"datasets/{dataset.id}/general_v{dataset.version}.parquet"
+    save_parquet(storage, key, df)
+    dataset.clean_key = key
+    dataset.row_count = len(df)
+    dataset.cleaning = report
+    result = explore(df, _profile_kinds(dataset), report)
+    dataset.quality = result.quality
+    dataset.kind = "general"
+    dataset.status = "ready"
     dataset.error = None
 
 
@@ -46,11 +70,11 @@ def create_from_upload(
     name: str | None = None,
     mapper: ColumnMapper | None = None,
 ) -> Dataset:
-    """Parse, profile, auto-map and (if the mapping is usable) clean an upload.
+    """Parse, profile, auto-map and clean an upload.
 
-    Raises ``UnsupportedFileError`` for unreadable files (nothing is stored then).
-    A dataset whose date/revenue columns cannot be found is saved with status
-    ``needs_mapping`` so the user can pick them on the Data screen.
+    Raises ``UnsupportedFileError`` for unreadable files (nothing is stored then). A file
+    with date and revenue columns becomes sales data; any other table becomes general data
+    (explored with EDA). The user can switch either way on the Data screen.
     """
     raw = load_table(data, filename)
     profile = profile_dataframe(raw)
@@ -72,12 +96,46 @@ def create_from_upload(
     try:
         result = run_pipeline(raw, mapping=mapping, profile=profile)
         _persist_clean(storage, dataset, result)
-    except MappingError as exc:
-        dataset.status = "needs_mapping"
-        dataset.error = str(exc)
+    except MappingError:
+        _make_general(storage, dataset, raw, profile)
     db.add(dataset)
     db.commit()
     return dataset
+
+
+def set_kind(db: Session, storage: Storage, dataset: Dataset, kind: str) -> Dataset:
+    """Analyse the upload as sales or general data. Raises MappingError for sales data
+    whose date and revenue columns haven't been chosen yet."""
+    raw = load_table(storage.read_bytes(dataset.raw_key), dataset.filename)
+    profile = DatasetProfile.model_validate(dataset.profile)
+    if kind == "sales":
+        mapping = ColumnMapping.model_validate(dataset.mapping or {})
+        result = run_pipeline(raw, mapping=mapping, profile=profile)
+        dataset.version += 1
+        _persist_clean(storage, dataset, result)
+    else:
+        dataset.version += 1
+        _make_general(storage, dataset, raw, profile)
+    db.commit()
+    return dataset
+
+
+_explorations: LRU[Exploration] = LRU(maxsize=32)
+
+
+def exploration(storage: Storage, dataset: Dataset, target: str | None = None) -> Exploration:
+    """EDA of a general dataset (memoised per version and target)."""
+
+    def compute() -> Exploration:
+        df = load_clean(storage, dataset)
+        return explore(df, _profile_kinds(dataset), dataset.cleaning or {}, target)
+
+    return _explorations.get_or_set((dataset.id, dataset.version, target), compute)
+
+
+def profile_kinds(dataset: Dataset) -> dict[str, str]:
+    """Column kinds from the upload profile."""
+    return _profile_kinds(dataset)
 
 
 def apply_mapping(
@@ -113,6 +171,9 @@ def context_for(dataset: Dataset, df: pd.DataFrame) -> InsightContext:
 
 def dataset_insights(storage: Storage, dataset: Dataset) -> list[Insight]:
     """All insights for the current version, best first (memoised per process)."""
+
+    if dataset.kind == "general":
+        return exploration(storage, dataset).insights
 
     def compute() -> list[Insight]:
         df = load_clean(storage, dataset)
@@ -157,6 +218,7 @@ def dataset_out(dataset: Dataset) -> DatasetOut:
         name=dataset.name,
         filename=dataset.filename,
         status=dataset.status,
+        kind=dataset.kind or "sales",
         row_count=dataset.row_count,
         version=dataset.version,
         created_at=dataset.created_at,

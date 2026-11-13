@@ -69,7 +69,7 @@ void main() {
     final api = defaultApi();
     when(() => api.datasets()).thenAnswer((_) async => []);
     await pumpApp(tester, api);
-    expect(find.text('Add your sales data'), findsOneWidget);
+    expect(find.text('Add your data'), findsOneWidget);
     await tester.tap(find.text('Upload data'));
     await settle(tester);
     expect(find.text('Upload a file'), findsOneWidget);
@@ -210,6 +210,8 @@ void main() {
     expect(find.text('Order Date'), findsOneWidget);
     expect(find.text('City / region'), findsOneWidget);
 
+    await Scrollable.ensureVisible(tester.element(find.text('City / region')), alignment: 0.4);
+    await settle(tester, frames: 3);
     await tester.tap(find.text('City / region'));
     await settle(tester);
     await tester.tap(find.text('Not used').last);

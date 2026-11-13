@@ -11,7 +11,7 @@ from app.core import datasets as svc
 from app.core.jobs import JobRunner, find_or_create_job
 from app.core.storage import Storage
 from app.db import get_db
-from app.deps import get_current_user, get_job_runner, get_storage, require_ready
+from app.deps import get_current_user, get_job_runner, get_storage, require_sales
 from app.ml.churn import ChurnResult, ChurnUnavailableError, churn_chart_spec, train_churn
 from app.ml.segments import (
     SegmentsResult,
@@ -52,7 +52,7 @@ class SegmentsOut(SegmentsResult):
 )
 def start_forecast(
     body: ForecastIn,
-    dataset: Dataset = Depends(require_ready),
+    dataset: Dataset = Depends(require_sales),
     db: Session = Depends(get_db),
     storage: Storage = Depends(get_storage),
     runner: JobRunner = Depends(get_job_runner),
@@ -83,7 +83,7 @@ def get_job(
 @router.post("/datasets/{dataset_id}/predict/churn", response_model=ChurnOut)
 def predict_churn(
     body: ChurnIn | None = None,
-    dataset: Dataset = Depends(require_ready),
+    dataset: Dataset = Depends(require_sales),
     db: Session = Depends(get_db),
     storage: Storage = Depends(get_storage),
 ) -> ChurnOut:
@@ -110,7 +110,7 @@ def predict_churn(
 @router.post("/datasets/{dataset_id}/whatif", response_model=WhatIfOut)
 def what_if(
     body: WhatIfIn,
-    dataset: Dataset = Depends(require_ready),
+    dataset: Dataset = Depends(require_sales),
     db: Session = Depends(get_db),
     storage: Storage = Depends(get_storage),
 ) -> WhatIfOut:
@@ -135,7 +135,7 @@ def what_if(
 
 @router.get("/datasets/{dataset_id}/segments", response_model=SegmentsOut)
 def segments(
-    dataset: Dataset = Depends(require_ready),
+    dataset: Dataset = Depends(require_sales),
     db: Session = Depends(get_db),
     storage: Storage = Depends(get_storage),
 ) -> SegmentsOut:

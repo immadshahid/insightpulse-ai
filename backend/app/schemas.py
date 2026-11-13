@@ -63,6 +63,7 @@ class DatasetOut(BaseModel):
     name: str
     filename: str
     status: DatasetStatus
+    kind: Literal["sales", "general"] = "sales"
     row_count: int
     version: int
     created_at: datetime

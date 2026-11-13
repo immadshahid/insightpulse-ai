@@ -139,6 +139,16 @@ class ApiClient {
   Future<dynamic> put(String path, {Object? data}) =>
       _send(() => _dio.put<dynamic>(path, data: data));
 
+  /// Uploads a file with progress, allowing for slow Wi-Fi and big files: up to 10 minutes
+  /// to send and 5 minutes for the server to read, clean and map the data.
+  Future<dynamic> postFile(String path, FormData data, {void Function(int sent, int total)? onProgress}) =>
+      _send(() => _dio.post<dynamic>(
+            path,
+            data: data,
+            onSendProgress: onProgress,
+            options: Options(sendTimeout: const Duration(minutes: 10), receiveTimeout: const Duration(minutes: 5)),
+          ));
+
   /// Raw bytes (chart PNGs). [path] may include the `/api/v1` prefix.
   Future<Uint8List> getBytes(String path, {Map<String, dynamic>? query}) async {
     final relative = path.startsWith('/api/v1') ? path.substring(7) : path;
@@ -176,8 +186,10 @@ class ApiClient {
     }
     switch (e.type) {
       case DioExceptionType.connectionTimeout:
-      case DioExceptionType.receiveTimeout:
+        return "Couldn't connect to the server in time. Check that you're on the same Wi-Fi as the server.";
       case DioExceptionType.sendTimeout:
+        return 'Sending took too long. Try a stronger Wi-Fi connection or a smaller file.';
+      case DioExceptionType.receiveTimeout:
         return 'The server took too long to respond. Please try again.';
       case DioExceptionType.connectionError:
         return "Can't reach the InsightPulse server. Check your connection.";

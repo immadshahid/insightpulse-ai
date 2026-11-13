@@ -19,6 +19,21 @@ from app.insights.base import Insight
 
 MIN_SCORE = 0.03
 
+GENERAL_GLOSSARY = [
+    (
+        "Method: findings",
+        "Findings compare how an outcome column differs between groups, flag columns with "
+        "many missing values, strong correlations between numeric columns (0.4 or more) and "
+        "skewed or dominated columns. Correlation shows association, not cause.",
+    ),
+    (
+        "Method: predict a column",
+        "Predict trains a gradient-boosting model with 5-fold cross-validation and compares "
+        "it with always guessing the most common value (or the average). Drivers are ranked "
+        "by permutation importance on held-out rows.",
+    ),
+]
+
 GLOSSARY = [
     ("Definition: revenue", "Revenue is total money received from sales after discounts."),
     ("Definition: orders", "Orders counts separate orders; one order can hold many products."),
@@ -82,13 +97,14 @@ def build_passages(
     forecasts: list[dict[str, Any]],
     pseudo: Pseudonymizer,
     real_customers: list[str],
+    glossary: list[tuple[str, str]] | None = None,
 ) -> list[Passage]:
     """Assemble the corpus, with personal data masked before anything is indexed."""
 
     def safe(text: str) -> str:
         return pseudo.mask_known(mask_text(text), real_customers)
 
-    out = [Passage(title, text) for title, text in GLOSSARY]
+    out = [Passage(title, text) for title, text in (GLOSSARY if glossary is None else glossary)]
     for ins in insights:
         body = " ".join(filter(None, [ins.headline, ins.why_it_matters, ins.narrative]))
         facts = json.dumps(ins.data, ensure_ascii=False, default=str)[:1500]

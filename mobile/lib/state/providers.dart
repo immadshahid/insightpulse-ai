@@ -222,6 +222,31 @@ final reportMonthsProvider = FutureProvider.autoDispose.family<ReportMonths, Str
   (ref, id) => ref.watch(apiProvider).reportMonths(id),
 );
 
+// ---------------------------------------------------------------- general data
+typedef ExploreKey = ({String datasetId, String? target});
+
+/// EDA of a general dataset; [ExploreKey.target] focuses the findings on one outcome.
+final exploreProvider = FutureProvider.autoDispose.family<Exploration, ExploreKey>(
+  (ref, key) => ref.watch(apiProvider).explore(key.datasetId, target: key.target),
+);
+
+/// The outcome column the user picked on Explore, per dataset (null = suggested one).
+class ExploreTargetController extends Notifier<Map<String, String>> {
+  @override
+  Map<String, String> build() => {};
+
+  void set(String datasetId, String target) => state = {...state, datasetId: target};
+}
+
+final exploreTargetProvider =
+    NotifierProvider<ExploreTargetController, Map<String, String>>(ExploreTargetController.new);
+
+typedef PredictKey = ({String datasetId, String target});
+
+final predictProvider = FutureProvider.autoDispose.family<Prediction, PredictKey>(
+  (ref, key) => ref.watch(apiProvider).predict(key.datasetId, key.target),
+);
+
 final churnProvider =FutureProvider.family<ChurnReport, String>((ref, id) => ref.watch(apiProvider).churn(id));
 
 final segmentsProvider = FutureProvider.family<List<CustomerSegment>, String>(

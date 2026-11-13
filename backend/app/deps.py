@@ -72,6 +72,26 @@ def require_ready(dataset: Dataset = Depends(get_owned_dataset)) -> Dataset:
     return dataset
 
 
+def require_sales(dataset: Dataset = Depends(require_ready)) -> Dataset:
+    """A ready dataset analysed as sales data (dashboards, forecasts, customers)."""
+    if dataset.kind == "general":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This dataset is analysed as general data. Open Explore, or switch it to sales "
+            "data on the Data tab.",
+        )
+    return dataset
+
+
+def require_general(dataset: Dataset = Depends(require_ready)) -> Dataset:
+    """A ready dataset analysed as general data."""
+    if dataset.kind != "general":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Explore is for general data; this dataset is sales data."
+        )
+    return dataset
+
+
 def get_job_runner(background_tasks: BackgroundTasks) -> JobRunner:
     """Job runner (FastAPI BackgroundTasks now; swap for a Celery runner here later)."""
     return BackgroundTasksRunner(background_tasks)

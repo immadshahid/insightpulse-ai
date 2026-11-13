@@ -6,6 +6,7 @@ import '../core/api_client.dart';
 import '../core/brand.dart';
 import '../core/share.dart';
 import '../core/theme.dart';
+import '../data/models.dart';
 import '../state/providers.dart';
 import '../widgets/common.dart';
 import '../widgets/motion.dart';
@@ -13,10 +14,13 @@ import '../widgets/visuals.dart';
 
 /// Pick a month, build the PDF on the server, then share or save it.
 class ReportScreen extends ConsumerStatefulWidget {
-  const ReportScreen({super.key, required this.datasetId, required this.datasetName});
+  const ReportScreen({super.key, required this.datasetId, required this.datasetName, this.general = false});
 
   final String datasetId;
   final String datasetName;
+
+  /// General data: one data report for the whole table instead of a month.
+  final bool general;
 
   @override
   ConsumerState<ReportScreen> createState() => _ReportScreenState();
@@ -35,6 +39,14 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
     (Icons.fact_check_outlined, 'Data overview (EDA)', 'Data quality, columns and order statistics'),
     (Icons.lightbulb_outline, 'Findings and next steps', 'Key insights and recommended actions'),
     (Icons.auto_graph_rounded, 'Looking ahead', 'Your revenue forecast with its likely range'),
+  ];
+
+  static const _insideGeneral = [
+    (Icons.dashboard_customize_outlined, 'At a glance', 'Rows, columns, completeness and data quality'),
+    (Icons.track_changes_rounded, 'What drives your outcome', 'A tested model and the columns that matter most'),
+    (Icons.show_chart_rounded, 'Charts', 'Outcome rates, distributions, correlations and missing values'),
+    (Icons.lightbulb_outline, 'Findings', 'The patterns worth knowing, most important first'),
+    (Icons.table_rows_outlined, 'Every column', 'Type, missing values and a short summary of each'),
   ];
 
   String _fileName(String month) {
@@ -56,7 +68,10 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
       _ready = null;
     });
     try {
-      final bytes = await ref.read(apiProvider).monthlyReport(widget.datasetId, month);
+      final api = ref.read(apiProvider);
+      final bytes = widget.general
+          ? await api.dataReport(widget.datasetId)
+          : await api.monthlyReport(widget.datasetId, month);
       if (!mounted) return;
       setState(() => _ready = (bytes: bytes, name: _fileName(month), label: label));
       await _share();
@@ -71,9 +86,12 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
   Widget build(BuildContext context) {
     final p = context.palette;
     final t = Theme.of(context).textTheme;
-    final months = ref.watch(reportMonthsProvider(widget.datasetId));
+    final general = widget.general;
+    final months = general
+        ? AsyncValue.data(ReportMonths(months: const [], defaultMonth: 'data-report'))
+        : ref.watch(reportMonthsProvider(widget.datasetId));
     return Scaffold(
-      appBar: AppBar(title: const Text('Monthly report')),
+      appBar: AppBar(title: Text(general ? 'Data report' : 'Monthly report')),
       body: SafeArea(
         child: months.when(
           loading: () => ListView(padding: const EdgeInsets.all(16), children: const [
@@ -84,7 +102,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
           error: (e, _) => ErrorState(error: e, onRetry: () => ref.invalidate(reportMonthsProvider(widget.datasetId))),
           data: (m) {
             final selected = _month ?? m.defaultMonth;
-            final label = m.months.where((x) => x.month == selected).firstOrNull?.label ?? selected;
+            final label = general ? 'Data' : m.months.where((x) => x.month == selected).firstOrNull?.label ?? selected;
             return ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 32), children: [
               FadeSlideIn(
                 child: GradientCard(
@@ -101,16 +119,20 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('Your month in one PDF',
+                        Text(general ? 'Your data in one PDF' : 'Your month in one PDF',
                             style: t.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
                         const SizedBox(height: 4),
-                        Text('Charts, a data overview and your forecast, ready for a partner, investor or bank.',
+                        Text(
+                            general
+                                ? 'A full data analysis with charts and findings, ready to share.'
+                                : 'Charts, a data overview and your forecast, ready for a partner, investor or bank.',
                             style: t.bodyMedium?.copyWith(color: Colors.white.withValues(alpha: 0.88), height: 1.35)),
                       ]),
                     ),
                   ]),
                 ),
               ),
+              if (!general) ...[
               const SizedBox(height: 18),
               const SectionTitle('Choose a month'),
               SizedBox(
@@ -130,12 +152,13 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                   },
                 ),
               ),
+              ],
               const SizedBox(height: 18),
               const SectionTitle("What's inside"),
               AppCard(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 child: Column(children: [
-                  for (final (i, (icon, title, detail)) in _inside.indexed) ...[
+                  for (final (i, (icon, title, detail)) in (general ? _insideGeneral : _inside).indexed) ...[
                     if (i > 0) const Divider(height: 1),
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 10),

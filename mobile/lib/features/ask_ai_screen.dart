@@ -18,6 +18,13 @@ const _starters = [
   'What is my busiest weekday?',
 ];
 
+const _generalStarters = [
+  'Summarise this dataset in plain words',
+  'Which groups differ the most in the outcome?',
+  'Which numeric columns are most related?',
+  'Are there missing values I should worry about?',
+];
+
 class AskAiScreen extends ConsumerStatefulWidget {
   const AskAiScreen({super.key});
 
@@ -92,7 +99,7 @@ class _AskAiScreenState extends ConsumerState<AskAiScreen> {
         return Column(children: [
           Expanded(
             child: entries.isEmpty
-                ? _Intro(onPick: _send)
+                ? _Intro(onPick: _send, general: dataset.isGeneral)
                 : ListView.builder(
                     controller: _scroll,
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -115,9 +122,10 @@ class _AskAiScreenState extends ConsumerState<AskAiScreen> {
 }
 
 class _Intro extends StatelessWidget {
-  const _Intro({required this.onPick});
+  const _Intro({required this.onPick, this.general = false});
 
   final void Function(String) onPick;
+  final bool general;
 
   @override
   Widget build(BuildContext context) {
@@ -134,13 +142,13 @@ class _Intro extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 16),
-      Text('Ask about your sales', textAlign: TextAlign.center,
+      Text(general ? 'Ask about your data' : 'Ask about your sales', textAlign: TextAlign.center,
           style: t.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
       const SizedBox(height: 6),
       Text('Answers are calculated from your data, with a chart and a note on how they were worked out.',
           textAlign: TextAlign.center, style: t.bodyMedium?.copyWith(color: p.muted)),
       const SizedBox(height: 24),
-      for (final q in _starters)
+      for (final q in general ? _generalStarters : _starters)
         Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: OutlinedButton(

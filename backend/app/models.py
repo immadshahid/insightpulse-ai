@@ -47,6 +47,8 @@ class Dataset(Base):
     name: Mapped[str] = mapped_column(String(200))
     filename: Mapped[str] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(20), default="processing")
+    # "sales": dashboards, forecasts and customers; "general": any table, explored with EDA.
+    kind: Mapped[str] = mapped_column(String(20), default="sales", server_default="sales")
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_key: Mapped[str] = mapped_column(String(255))
     clean_key: Mapped[str | None] = mapped_column(String(255), nullable=True)

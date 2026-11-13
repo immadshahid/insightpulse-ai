@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api import ai, auth, charts, dashboard, datasets, ml, reports
+from app.api import ai, auth, charts, dashboard, datasets, explore, ml, reports
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
@@ -14,3 +14,4 @@ api_router.include_router(charts.router)
 api_router.include_router(ml.router)
 api_router.include_router(ai.router)
 api_router.include_router(reports.router)
+api_router.include_router(explore.router)

@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.agents.knowledge import KnowledgeBase, build_passages
+from app.ai.agents.knowledge import GENERAL_GLOSSARY, KnowledgeBase, build_passages
 from app.ai.agents.orchestrator import ask_agentic
 from app.ai.agents.workspace import Ledger, Workspace, build_workspace
 from app.ai.chat import ChatAnswer, ChatTurn
@@ -27,7 +27,7 @@ def workspace_for(storage: Storage, dataset: Dataset, currency: str | None) -> W
     def build() -> Workspace:
         clean = svc.load_clean(storage, dataset)
         raw = load_table(storage.read_bytes(dataset.raw_key), dataset.filename)
-        return build_workspace(clean, raw, dataset.mapping or {}, currency)
+        return build_workspace(clean, raw, dataset.mapping or {}, currency, dataset.kind)
 
     return _workspaces.get_or_set((dataset.id, dataset.version), build)
 
@@ -57,6 +57,7 @@ def knowledge_for(db: Session, storage: Storage, dataset: Dataset, ws: Workspace
         _finished_forecasts(db, dataset),
         ws.pseudo,
         ws.real_customers,
+        GENERAL_GLOSSARY if dataset.kind == "general" else None,
     )
     return KnowledgeBase(passages)
 

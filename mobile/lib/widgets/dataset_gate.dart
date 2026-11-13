@@ -30,8 +30,9 @@ class DatasetGate extends ConsumerWidget {
     if (current == null) {
       return EmptyState(
         icon: Icons.upload_file_rounded,
-        title: 'Add your sales data',
-        message: 'Upload a CSV or Excel export of your orders. We will build your dashboard automatically.',
+        title: 'Add your data',
+        message: 'Upload any CSV or Excel file: sales orders get a business dashboard, and any other '
+            'table (like Titanic passengers or survey answers) gets a full data analysis.',
         action: 'Upload data',
         onAction: () => context.go('/data'),
       );

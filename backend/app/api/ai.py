@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.ai.agents.service import answer_with_agents
+from app.ai.agents.workspace import Ledger
 from app.ai.chat import ChatAnswer, ChatTurn, ask
 from app.ai.client import LLMClient, LLMError, get_llm
 from app.ai.offline import answer_offline
@@ -18,7 +19,7 @@ from app.core.jobs import latest_job
 from app.core.lru import LRU
 from app.core.storage import Storage
 from app.db import get_db
-from app.deps import get_storage, require_ready
+from app.deps import get_storage, require_ready, require_sales
 from app.models import Dataset
 from app.schemas import (
     ActionOut,
@@ -44,9 +45,12 @@ def chat(
     llm: LLMClient = Depends(get_llm),
 ) -> ChatOut:
     """Answer a question about the dataset with numbers computed by pandas."""
+    history = [ChatTurn(role=m.role, content=m.content) for m in body.history]
+    if dataset.kind == "general":
+        result, ledger = _general_chat(llm, db, storage, dataset, body.message, history)
+        return _chat_out(db, dataset, result, ledger)
     df = svc.load_clean(storage, dataset)
     currency = svc.context_for(dataset, df).currency
-    history = [ChatTurn(role=m.role, content=m.content) for m in body.history]
     result, ledger = None, None
 
     def offline() -> ChatAnswer:
@@ -68,6 +72,43 @@ def chat(
         except LLMError as exc:
             log.warning("AI service failed, answering with rules: %s", exc)
             result = offline()
+    return _chat_out(db, dataset, result, ledger)
+
+
+def _general_chat(
+    llm: LLMClient,
+    db: Session,
+    storage: Storage,
+    dataset: Dataset,
+    message: str,
+    history: list[ChatTurn],
+) -> tuple[ChatAnswer, Ledger | None]:
+    """General data is answered by the agent team; without AI, point to Explore instead."""
+    if llm.available and hasattr(llm, "agent_turn"):
+        try:
+            return answer_with_agents(llm, db, storage, dataset, message, None, history)
+        except LLMError as exc:
+            log.warning("Agent team could not answer general data: %s", exc)
+            note = "The AI couldn't finish this question just now. Please try again"
+    else:
+        note = "Ask AI needs the AI service, which is turned off on this server"
+    return (
+        ChatAnswer(
+            answer=f"{note}. Meanwhile, the Explore view on Home shows every column's "
+            "statistics, the main findings and what drives your outcome column.",
+            how=None,
+            follow_ups=[],
+            plan=None,
+            result=None,
+            chart=None,
+            source="offline",
+            answerable=False,
+        ),
+        None,
+    )
+
+
+def _chat_out(db: Session, dataset: Dataset, result: ChatAnswer, ledger: Ledger | None) -> ChatOut:
     chart_url = svc.register_chart(db, dataset, result.chart)
     db.commit()
     return ChatOut(
@@ -86,7 +127,7 @@ def chat(
 
 @router.get("/{dataset_id}/recommendations", response_model=RecommendationsOut)
 def recommendations(
-    dataset: Dataset = Depends(require_ready),
+    dataset: Dataset = Depends(require_sales),
     db: Session = Depends(get_db),
     storage: Storage = Depends(get_storage),
     llm: LLMClient = Depends(get_llm),

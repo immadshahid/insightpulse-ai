@@ -25,6 +25,7 @@ from app.pipeline.parsing import looks_numeric, parse_dates, parse_numeric
 MAX_ROWS = 200
 SQL_SECONDS = 3.0
 TABLE = "sales"
+GENERAL_TABLE = "data"
 
 _ALLOWED_SQL_ACTIONS = {
     sqlite3.SQLITE_SELECT,
@@ -102,11 +103,11 @@ def _sanitise_raw(
 class SqlSandbox:
     """Read-only, time-limited SQL over a private in-memory copy of the clean data."""
 
-    def __init__(self, df: pd.DataFrame) -> None:
+    def __init__(self, df: pd.DataFrame, table: str = "sales") -> None:
         self._lock = threading.Lock()
         self._conn = sqlite3.connect(":memory:", check_same_thread=False)
-        df.to_sql(TABLE, self._conn, index=False)
-        self._schema = [(r[1], r[2]) for r in self._conn.execute(f"PRAGMA table_info({TABLE})")]
+        df.to_sql(table, self._conn, index=False)
+        self._schema = [(r[1], r[2]) for r in self._conn.execute(f"PRAGMA table_info({table})")]
         self._conn.execute("PRAGMA query_only=ON")
         self._conn.set_authorizer(self._authorize)
 
@@ -155,10 +156,13 @@ class Workspace:
     pseudo: Pseudonymizer
     real_customers: list[str]
     currency: str | None
-    date_min: str
-    date_max: str
+    date_min: str | None
+    date_max: str | None
     # Cleaned field -> the uploaded column it came from, e.g. {"region": "City"}.
     field_sources: dict[str, str] = field(default_factory=dict)
+    # "sales" (table `sales` of order lines) or "general" (table `data`, any table).
+    kind: str = "sales"
+    table: str = TABLE
 
     def describe_fields(self) -> str:
         """One line naming the original column behind each cleaned field."""
@@ -169,23 +173,38 @@ _ROLES = ("date", "revenue", "quantity", "product", "customer", "region", "order
 
 
 def build_workspace(
-    clean: pd.DataFrame, raw: pd.DataFrame, mapping: dict[str, Any], currency: str | None
+    clean: pd.DataFrame,
+    raw: pd.DataFrame,
+    mapping: dict[str, Any],
+    currency: str | None,
+    kind: str = "sales",
 ) -> Workspace:
     """Create the sanitised copies. Aliases are shared by the SQL and CSV views."""
     pseudo = Pseudonymizer()
     safe_clean = _sanitise_clean(clean, pseudo)
-    safe_raw = _sanitise_raw(raw, mapping, pseudo)
+    if kind == "general":
+        table = GENERAL_TABLE
+        sources: dict[str, str] = {}
+        has_dates = False
+        safe_raw = safe_clean  # the typed table is the file, minus personal columns
+    else:
+        table = TABLE
+        sources = {
+            r: str(mapping[r]) for r in _ROLES if isinstance(mapping.get(r), str) and r in clean
+        }
+        has_dates = "date" in clean
+        safe_raw = _sanitise_raw(raw, mapping, pseudo)
     return Workspace(
-        sql=SqlSandbox(safe_clean),
+        sql=SqlSandbox(safe_clean, table),
         csv=safe_raw,
         pseudo=pseudo,
         real_customers=list(pseudo.forward),
         currency=currency,
-        date_min=str(clean["date"].min().date()),
-        date_max=str(clean["date"].max().date()),
-        field_sources={
-            r: str(mapping[r]) for r in _ROLES if isinstance(mapping.get(r), str) and r in clean
-        },
+        date_min=str(clean["date"].min().date()) if has_dates else None,
+        date_max=str(clean["date"].max().date()) if has_dates else None,
+        field_sources=sources,
+        kind=kind,
+        table=table,
     )
 
 

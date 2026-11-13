@@ -26,6 +26,10 @@ class Brand {
     'products': Color(0xFF7C3AED),
     'customers': Color(0xFFDB2777),
     'anomalies': Color(0xFFC2410C),
+    'target': Color(0xFF4F46E5),
+    'relationships': Color(0xFF0891B2),
+    'distributions': Color(0xFF7C3AED),
+    'quality': Color(0xFFC2410C),
   };
 
   /// Same hues stepped lighter for contrast on the dark surface.
@@ -38,6 +42,10 @@ class Brand {
     'products': Color(0xFFA78BFA),
     'customers': Color(0xFFF472B6),
     'anomalies': Color(0xFFF07A45),
+    'target': Color(0xFF8B85F5),
+    'relationships': Color(0xFF22D3EE),
+    'distributions': Color(0xFFA78BFA),
+    'quality': Color(0xFFF07A45),
   };
 
   /// Accent for a KPI key or insight category.
@@ -49,5 +57,9 @@ class Brand {
     'products': Icons.inventory_2_outlined,
     'customers': Icons.people_alt_outlined,
     'anomalies': Icons.warning_amber_rounded,
+    'target': Icons.track_changes_rounded,
+    'relationships': Icons.hub_outlined,
+    'distributions': Icons.bar_chart_rounded,
+    'quality': Icons.fact_check_outlined,
   };
 }

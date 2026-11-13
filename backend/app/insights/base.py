@@ -10,7 +10,17 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field
 
-Category = Literal["sales", "products", "customers", "anomalies"]
+Category = Literal[
+    "sales",
+    "products",
+    "customers",
+    "anomalies",
+    # General (non-sales) datasets
+    "target",
+    "quality",
+    "relationships",
+    "distributions",
+]
 ChartKind = Literal[
     "line", "bar_ranking", "heatmap", "distribution", "corr_heatmap", "scatter_reg", "donut", "shap"
 ]

@@ -40,6 +40,20 @@ each row a readable label such as 'Sep 2026' or 'Last 30 days', never placeholde
 {_UNTRUSTED}
 {_REPORT_RULES}"""
 
+SQL_SYSTEM_GENERAL = f"""You are a data analyst who answers one task by querying a SQLite table
+called `data`, which holds the user's dataset (one row per record; it is not necessarily sales).
+Call sql_schema first to see the columns, then run_sql. Column names may contain capitals or
+spaces: wrap them in double quotes, e.g. SELECT "Sex", AVG("Survived") FROM data GROUP BY 1.
+Fix and retry a query if it errors. Give groups readable labels, never placeholders like A/B.
+{_UNTRUSTED}
+{_REPORT_RULES}"""
+
+
+def sql_system(ws: Workspace) -> str:
+    """Instructions for the SQL agent, for sales or general data."""
+    return SQL_SYSTEM_GENERAL if ws.kind == "general" else SQL_SYSTEM
+
+
 CSV_SYSTEM = f"""You are a data analyst who answers one task from the file as the user
 uploaded it, including columns the dashboards do not use. Call csv_schema first to see the
 columns, then csv_query, csv_describe or csv_correlate. Use exact column names and exact
@@ -79,7 +93,7 @@ def sql_tools(ws: Workspace, ledger: Ledger) -> list[Tool]:
             {"name": n, "type": t, "from_file_column": ws.field_sources.get(n)}
             for n, t in ws.sql.schema
         ]
-        return {"table": TABLE, "columns": columns, "first": ws.date_min, "last": ws.date_max}
+        return {"table": ws.table, "columns": columns, "first": ws.date_min, "last": ws.date_max}
 
     def run(args: dict[str, Any]) -> dict[str, Any]:
         sql, purpose = args["query"], args["purpose"]
@@ -89,10 +103,10 @@ def sql_tools(ws: Workspace, ledger: Ledger) -> list[Tool]:
         return {"evidence_id": eid, "rows": rows, "truncated": truncated}
 
     return [
-        Tool("sql_schema", "List the columns of the sales table.", {}, schema),
+        Tool("sql_schema", f"List the columns of the {ws.table} table.", {}, schema),
         Tool(
             "run_sql",
-            f"Run one read-only SELECT on {TABLE}. At most {MAX_ROWS} rows come back; aggregate "
+            f"Run one read-only SELECT on {ws.table}. At most {MAX_ROWS} rows come back; aggregate "
             "rather than listing raw rows.",
             {
                 "query": {"type": "string", "description": "One SELECT statement."},
@@ -276,7 +290,9 @@ def run_sql_agent(
     llm: Any, ws: Workspace, ledger: Ledger, task: str, deadline: float
 ) -> dict[str, Any]:
     """Delegate a task to the SQL agent."""
-    return _specialist(llm, "sql_agent", SQL_SYSTEM, sql_tools(ws, ledger), task, ledger, deadline)
+    return _specialist(
+        llm, "sql_agent", sql_system(ws), sql_tools(ws, ledger), task, ledger, deadline
+    )
 
 
 def run_csv_agent(
