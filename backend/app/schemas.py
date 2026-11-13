@@ -242,6 +242,8 @@ class ChatOut(BaseModel):
     source: Literal["llm", "template", "agent", "offline"]
     steps: list[AgentStepOut] = []
     sources: list[SourceOut] = []
+    # AI questions the user can still ask today; null when there is no daily limit.
+    ai_questions_left: int | None = None
 
 
 class ActionOut(BaseModel):

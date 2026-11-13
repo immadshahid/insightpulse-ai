@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     # Ask AI uses the agent team (retrieval, SQL and CSV agents); false = fixed query plans.
     agentic_chat: bool = True
     agent_deadline_seconds: float = 85.0
+    # AI questions per user per UTC day on Ask AI (0 = no limit).
+    ai_daily_questions: int = 25
 
 
 @lru_cache

@@ -14,6 +14,7 @@ from app.ai.client import LLMClient, LLMError, get_llm
 from app.ai.offline import answer_offline
 from app.ai.recommendations import recommend
 from app.config import get_settings
+from app.core import ai_quota as quota
 from app.core import datasets as svc
 from app.core.jobs import latest_job
 from app.core.lru import LRU
@@ -46,8 +47,10 @@ def chat(
 ) -> ChatOut:
     """Answer a question about the dataset with numbers computed by pandas."""
     history = [ChatTurn(role=m.role, content=m.content) for m in body.history]
+    # Each question that uses the AI service counts towards the user's daily allowance.
+    over_limit = llm.available and not quota.take_question(db, dataset.user_id)
     if dataset.kind == "general":
-        result, ledger = _general_chat(llm, db, storage, dataset, body.message, history)
+        result, ledger = _general_chat(llm, db, storage, dataset, body.message, history, over_limit)
         return _chat_out(db, dataset, result, ledger)
     df = svc.load_clean(storage, dataset)
     currency = svc.context_for(dataset, df).currency
@@ -57,7 +60,13 @@ def chat(
         insights = svc.dataset_insights(storage, dataset)
         return answer_offline(df, body.message, currency, insights)
 
-    if not llm.available:
+    if over_limit:
+        result = offline()
+        result.answer = (
+            f"{quota.limit_message()}, so this is a quick answer from built-in rules.\n\n"
+            f"{result.answer}"
+        )
+    elif not llm.available:
         result = offline()
     elif get_settings().agentic_chat and hasattr(llm, "agent_turn"):
         try:
@@ -82,9 +91,12 @@ def _general_chat(
     dataset: Dataset,
     message: str,
     history: list[ChatTurn],
+    over_limit: bool = False,
 ) -> tuple[ChatAnswer, Ledger | None]:
     """General data is answered by the agent team; without AI, point to Explore instead."""
-    if llm.available and hasattr(llm, "agent_turn"):
+    if over_limit:
+        note = quota.limit_message()
+    elif llm.available and hasattr(llm, "agent_turn"):
         try:
             return answer_with_agents(llm, db, storage, dataset, message, None, history)
         except LLMError as exc:
@@ -122,6 +134,7 @@ def _chat_out(db: Session, dataset: Dataset, result: ChatAnswer, ledger: Ledger 
         plan=result.plan,
         answerable=result.answerable,
         source=result.source,
+        ai_questions_left=quota.questions_left(db, dataset.user_id),
     )
 
 

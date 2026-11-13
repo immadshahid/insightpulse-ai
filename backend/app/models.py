@@ -101,3 +101,15 @@ class Chart(Base):
     kind: Mapped[str] = mapped_column(String(40))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONType)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AiUsage(Base):
+    """How many AI questions a user asked on one UTC day (for the daily limit)."""
+
+    __tablename__ = "ai_usage"
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    day: Mapped[str] = mapped_column(String(10), primary_key=True)  # YYYY-MM-DD
+    questions: Mapped[int] = mapped_column(Integer, default=0)
