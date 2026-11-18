@@ -57,6 +57,125 @@ class DatasetSummary {
   bool get isGeneral => kind == 'general';
 }
 
+/// A cleaning step as the server defines it. The app passes steps back unchanged.
+typedef CleanStep = Map<String, dynamic>;
+
+/// Fixes the server found by itself, and whether typed requests are available.
+class CleanSuggestions {
+  CleanSuggestions({required this.items, required this.aiAvailable});
+
+  factory CleanSuggestions.fromJson(Map<String, dynamic> j) => CleanSuggestions(
+        items: [
+          for (final s in (j['suggestions'] as List? ?? const []))
+            (
+              label: (s as Map)['label'] as String,
+              steps: [for (final step in s['steps'] as List) (step as Map).cast<String, dynamic>()],
+            ),
+        ],
+        aiAvailable: j['ai_available'] == true,
+      );
+
+  final List<({String label, List<CleanStep> steps})> items;
+  final bool aiAvailable;
+}
+
+/// What a cleaning plan would change, step by step.
+class CleanPreview {
+  CleanPreview({
+    required this.rowsBefore,
+    required this.rowsAfter,
+    required this.columnsBefore,
+    required this.columnsAfter,
+    required this.steps,
+  });
+
+  factory CleanPreview.fromJson(Map<String, dynamic> j) => CleanPreview(
+        rowsBefore: (j['rows_before'] as num).toInt(),
+        rowsAfter: (j['rows_after'] as num).toInt(),
+        columnsBefore: (j['columns_before'] as num).toInt(),
+        columnsAfter: (j['columns_after'] as num).toInt(),
+        steps: [
+          for (final s in (j['steps'] as List? ?? const []))
+            (
+              step: ((s as Map)['step'] as Map).cast<String, dynamic>(),
+              description: s['description'] as String,
+              effect: s['effect'] as String,
+            ),
+        ],
+      );
+
+  final int rowsBefore;
+  final int rowsAfter;
+  final int columnsBefore;
+  final int columnsAfter;
+  final List<({CleanStep step, String description, String effect})> steps;
+}
+
+/// How two or more datasets would be combined, before the user confirms.
+class CombinePreview {
+  CombinePreview({
+    required this.suggested,
+    required this.stackPossible,
+    required this.stackRows,
+    required this.stackColumns,
+    required this.sharedColumns,
+    required this.partialColumns,
+    required this.stackReason,
+    required this.joinPossible,
+    required this.joinBase,
+    required this.joinRows,
+    required this.joinColumns,
+    required this.joinSteps,
+    required this.joinReason,
+  });
+
+  factory CombinePreview.fromJson(Map<String, dynamic> j) {
+    final s = _map(j['stack']);
+    final jn = _map(j['join']);
+    return CombinePreview(
+      suggested: j['suggested'] as String?,
+      stackPossible: s['possible'] == true,
+      stackRows: (s['rows'] as num?)?.toInt() ?? 0,
+      stackColumns: (s['columns'] as num?)?.toInt() ?? 0,
+      sharedColumns: ((s['shared_columns'] as List?) ?? const []).map((e) => '$e').toList(),
+      partialColumns: ((s['partial_columns'] as List?) ?? const []).map((e) => '$e').toList(),
+      stackReason: s['reason'] as String?,
+      joinPossible: jn['possible'] == true,
+      joinBase: jn['base'] as String?,
+      joinRows: (jn['rows'] as num?)?.toInt() ?? 0,
+      joinColumns: (jn['columns'] as num?)?.toInt() ?? 0,
+      joinSteps: [
+        for (final step in (jn['steps'] as List? ?? const []))
+          (
+            left: (step as Map)['left'] as String,
+            right: step['right'] as String,
+            leftColumn: step['left_column'] as String,
+            rightColumn: step['right_column'] as String,
+            matchPct: _d(step['match_pct']),
+            columnsAdded: (step['columns_added'] as num).toInt(),
+          ),
+      ],
+      joinReason: jn['reason'] as String?,
+    );
+  }
+
+  /// 'stack', 'join' or null when the files fit neither way.
+  final String? suggested;
+  final bool stackPossible;
+  final int stackRows;
+  final int stackColumns;
+  final List<String> sharedColumns;
+  final List<String> partialColumns;
+  final String? stackReason;
+  final bool joinPossible;
+  final String? joinBase;
+  final int joinRows;
+  final int joinColumns;
+  final List<({String left, String right, String leftColumn, String rightColumn, double matchPct, int columnsAdded})>
+      joinSteps;
+  final String? joinReason;
+}
+
 /// One column of a general dataset, as Explore summarises it.
 class ExploreColumn {
   ExploreColumn({

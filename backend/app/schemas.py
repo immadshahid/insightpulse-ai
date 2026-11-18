@@ -92,6 +92,61 @@ class SheetIn(BaseModel):
     name: str | None = Field(default=None, max_length=200)
 
 
+class CombineIn(BaseModel):
+    """Datasets to combine into a new one."""
+
+    dataset_ids: list[str] = Field(min_length=2, max_length=6)
+    mode: Literal["stack", "join"]
+    name: str | None = Field(default=None, max_length=200)
+
+
+class CombinePreviewIn(BaseModel):
+    """Datasets to check before combining."""
+
+    dataset_ids: list[str] = Field(min_length=2, max_length=6)
+
+
+class StackPlanOut(BaseModel):
+    """Result of placing the files under each other."""
+
+    possible: bool
+    rows: int = 0
+    columns: int = 0
+    shared_columns: list[str] = []
+    partial_columns: list[str] = []
+    reason: str | None = None
+
+
+class JoinStepOut(BaseModel):
+    """One lookup file linked to the main file."""
+
+    left: str
+    right: str
+    left_column: str
+    right_column: str
+    match_pct: float
+    columns_added: int
+
+
+class JoinPlanOut(BaseModel):
+    """Result of linking the files on shared key columns."""
+
+    possible: bool
+    base: str | None = None
+    rows: int = 0
+    columns: int = 0
+    steps: list[JoinStepOut] = []
+    reason: str | None = None
+
+
+class CombinePreviewOut(BaseModel):
+    """What each way of combining would produce; ``suggested`` fits these files best."""
+
+    suggested: Literal["stack", "join"] | None
+    stack: StackPlanOut
+    join: JoinPlanOut
+
+
 class MappingIn(BaseModel):
     """User-edited role mapping; null means 'no column for this role'."""
 

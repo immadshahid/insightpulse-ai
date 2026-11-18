@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -13,6 +14,8 @@ from app.ai.client import LLMClient, get_llm
 from app.ai.mapping import LLMColumnMapper
 from app.config import Settings, get_settings
 from app.core import datasets as svc
+from app.core.combine import CombineError
+from app.core.combine import preview as combine_preview
 from app.core.sheets import SheetError, fetch_sheet
 from app.core.storage import Storage
 from app.db import get_db
@@ -22,7 +25,17 @@ from app.pipeline.loader import UnsupportedFileError
 from app.pipeline.mapping import REQUIRED_ROLES, ROLES, ColumnMapping, MappingError
 from app.pipeline.profiler import DatasetProfile
 from app.pipeline.quality import QualityReport
-from app.schemas import DatasetOut, MappingIn, ProfileOut, SheetIn
+from app.schemas import (
+    CombineIn,
+    CombinePreviewIn,
+    CombinePreviewOut,
+    DatasetOut,
+    JoinPlanOut,
+    MappingIn,
+    ProfileOut,
+    SheetIn,
+    StackPlanOut,
+)
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 SAMPLE_FILE = Path(os.path.abspath(__file__)).parents[2] / "sample_data" / "sales_sample.csv"
@@ -117,6 +130,63 @@ def import_sheet(
         )
     except (SheetError, UnsupportedFileError) as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return _profile_out(dataset)
+
+
+def _owned(db: Session, user: User, dataset_ids: list[str]) -> list[Dataset]:
+    """The user's datasets for these ids, in the order given; 404 if any isn't theirs."""
+    if len(set(dataset_ids)) != len(dataset_ids):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Choose each dataset once.")
+    found = []
+    for dataset_id in dataset_ids:
+        dataset = db.get(Dataset, dataset_id)
+        if dataset is None or dataset.user_id != user.id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Dataset not found")
+        found.append(dataset)
+    return found
+
+
+@router.post("/combine/preview", response_model=CombinePreviewOut)
+def preview_combine(
+    body: CombinePreviewIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    storage: Storage = Depends(get_storage),
+) -> CombinePreviewOut:
+    """How these datasets would be combined: stacked (same columns) or joined (shared key)."""
+    try:
+        result = combine_preview(svc.combine_tables(storage, _owned(db, user, body.dataset_ids)))
+    except CombineError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    return CombinePreviewOut(
+        suggested=result["suggested"],
+        stack=StackPlanOut(**asdict(result["stack"])),
+        join=JoinPlanOut(**asdict(result["join"])),
+    )
+
+
+@router.post("/combine", response_model=ProfileOut, status_code=status.HTTP_201_CREATED)
+def combine_datasets(
+    body: CombineIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    storage: Storage = Depends(get_storage),
+    llm: LLMClient = Depends(get_llm),
+) -> ProfileOut:
+    """Create a new dataset from two or more: ``stack`` files with the same columns, or
+    ``join`` related files on their shared key. The originals are kept."""
+    try:
+        dataset = svc.create_combined(
+            db,
+            storage,
+            user,
+            _owned(db, user, body.dataset_ids),
+            body.mode,
+            name=body.name,
+            mapper=LLMColumnMapper(llm),
+        )
+    except (CombineError, UnsupportedFileError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return _profile_out(dataset)
 
 

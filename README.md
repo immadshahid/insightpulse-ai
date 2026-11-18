@@ -53,6 +53,22 @@ It works with two kinds of data:
   Columns that merely restate the outcome are detected and left out.
 - **PDF data report** covering the whole table.
 
+### Multi-file analysis
+- **Stack** files with the same columns (monthly or branch exports) into one dataset, with a
+  source column so the files can be compared.
+- **Join** related files (orders, customers, products): the shared key columns are found
+  automatically, and a preview shows how many rows match before anything is created.
+- The combined dataset works with every other feature, so Ask AI can answer questions that
+  span several files.
+
+### Natural-language data cleaning
+- Type what to fix ("remove rows where age is missing", "change 'lhr' to 'Lahore'") and the
+  AI turns it into safe, predefined cleaning steps. No AI-written code is ever run.
+- The app also suggests fixes it finds itself: duplicates, mostly-empty columns, gaps and
+  inconsistent spellings.
+- Every change is previewed before it is applied, and the result is saved as a new dataset,
+  so the original is never changed.
+
 ### Ask AI
 - A team of AI agents answers questions about the data in plain language, with a chart and a
   short explanation of how the answer was worked out.

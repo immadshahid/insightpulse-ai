@@ -10,13 +10,14 @@ import '../state/providers.dart';
 const _slides = [
   (
     Icons.upload_file_rounded,
-    'Drop in your sales file',
-    'Excel or CSV straight from your shop system. We tidy the columns and check the data for you.',
+    'Drop in any data file',
+    'Excel or CSV: sales, surveys, student records, anything. Combine several files, and we '
+        'tidy the columns and check the data for you.',
   ),
   (
     Icons.insights_rounded,
     'See what changed, and why',
-    'Plain-language insights, a forecast you can trust, and the three things to do next.',
+    'Plain-language insights, forecasts and predictions you can trust, and what to do next.',
   ),
   (
     Icons.auto_awesome,

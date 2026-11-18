@@ -9,6 +9,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.core.combine import Table, combine
 from app.core.lru import LRU
 from app.core.storage import Storage, load_parquet, save_parquet
 from app.eda.clean import clean_general
@@ -249,3 +250,42 @@ def read_upload_limited(stream: io.BufferedIOBase, max_bytes: int) -> bytes:
     if len(data) > max_bytes:
         raise ValueError(f"File is larger than {max_bytes // (1024 * 1024)} MB.")
     return data
+
+
+def combine_tables(storage: Storage, datasets: list[Dataset]) -> list[Table]:
+    """The uploaded tables behind ``datasets``, each under a distinct name."""
+    tables: list[Table] = []
+    seen: dict[str, int] = {}
+    for d in datasets:
+        seen[d.name] = seen.get(d.name, 0) + 1
+        name = d.name if seen[d.name] == 1 else f"{d.name} ({seen[d.name]})"
+        tables.append(Table(name, load_table(storage.read_bytes(d.raw_key), d.filename)))
+    return tables
+
+
+def create_combined(
+    db: Session,
+    storage: Storage,
+    user: User,
+    datasets: list[Dataset],
+    mode: str,
+    name: str | None = None,
+    mapper: ColumnMapper | None = None,
+) -> Dataset:
+    """Stack or join the datasets' uploaded tables into a new dataset.
+
+    Raises ``CombineError`` when the files don't fit that way. The result goes through
+    the same pipeline as an upload, so it becomes sales or general data as usual.
+    """
+    tables = combine_tables(storage, datasets)
+    combined = combine(tables, mode)
+    data = combined.to_csv(index=False).encode()
+    default = " + ".join(t.name for t in tables)
+    return create_from_upload(
+        db, storage, user, "combined.csv", data, name=(name or default)[:200], mapper=mapper
+    )
+
+
+def load_raw(storage: Storage, dataset: Dataset) -> pd.DataFrame:
+    """The table as the user uploaded it (before any sales cleaning)."""
+    return load_table(storage.read_bytes(dataset.raw_key), dataset.filename)

@@ -83,6 +83,42 @@ class InsightPulseApi {
     return [for (final s in j['segments'] as List) CustomerSegment.fromJson(s as Map<String, dynamic>)];
   }
 
+  // ------------------------------------------------------------ multi-file
+  /// How these datasets would be combined: stacked (same columns) or joined (shared key).
+  Future<CombinePreview> combinePreview(List<String> datasetIds) async => CombinePreview.fromJson(
+        await _http.post('/datasets/combine/preview', data: {'dataset_ids': datasetIds}) as Map<String, dynamic>,
+      );
+
+  /// Creates a new dataset from two or more; [mode] is 'stack' or 'join'.
+  Future<DatasetProfile> combine(List<String> datasetIds, String mode, {String? name}) async =>
+      DatasetProfile.fromJson(await _http.post(
+        '/datasets/combine',
+        data: {'dataset_ids': datasetIds, 'mode': mode, 'name': ?name},
+      ));
+
+  // ------------------------------------------------------------ cleaning
+  Future<CleanSuggestions> cleanSuggestions(String datasetId) async => CleanSuggestions.fromJson(
+        await _http.get('/datasets/$datasetId/clean/suggestions') as Map<String, dynamic>,
+      );
+
+  /// Turns a plain-language request into cleaning steps. [note] says what was left out
+  /// when only part of the request could be done.
+  Future<({List<CleanStep> steps, String? note})> cleanPlan(String datasetId, String instruction) async {
+    final j = await _http.post('/datasets/$datasetId/clean/plan', data: {'instruction': instruction}) as Map;
+    return (
+      steps: [for (final s in j['steps'] as List) (s as Map).cast<String, dynamic>()],
+      note: j['note'] as String?,
+    );
+  }
+
+  Future<CleanPreview> cleanPreview(String datasetId, List<CleanStep> steps) async => CleanPreview.fromJson(
+        await _http.post('/datasets/$datasetId/clean/preview', data: {'steps': steps}) as Map<String, dynamic>,
+      );
+
+  /// Saves the cleaned table as a new dataset; the original is kept.
+  Future<DatasetProfile> cleanApply(String datasetId, List<CleanStep> steps) async =>
+      DatasetProfile.fromJson(await _http.post('/datasets/$datasetId/clean/apply', data: {'steps': steps}));
+
   // ------------------------------------------------------------ general data
   Future<Exploration> explore(String datasetId, {String? target}) async => Exploration.fromJson(
         await _http.get('/datasets/$datasetId/explore', query: {'target': ?target}) as Map<String, dynamic>,

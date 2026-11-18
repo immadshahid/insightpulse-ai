@@ -12,3 +12,10 @@ ENV PATH="/opt/flutter-pinned/bin:${PATH}"
 RUN flutter --disable-analytics && flutter --version \
     && flutter create --platforms=android /tmp/warmup >/dev/null \
     && cd /tmp/warmup && flutter test >/dev/null && rm -rf /tmp/warmup
+
+# Release builds need the NDK and CMake. Install them here once; otherwise Gradle
+# downloads about 1 GB on every APK build. Keep the NDK version in step with Flutter's.
+ARG NDK_VERSION=28.2.13676358
+ARG CMAKE_VERSION=3.22.1
+RUN yes | sdkmanager --licenses >/dev/null \
+    && sdkmanager --install "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}" "platforms;android-35" >/dev/null

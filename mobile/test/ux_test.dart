@@ -106,7 +106,7 @@ void main() {
   testWidgets('first launch shows the welcome tour once, then sign in', (tester) async {
     final prefs = MemoryPrefs();
     await pumpApp(tester, defaultApi(), loggedIn: false, prefs: prefs);
-    expect(find.text('Drop in your sales file'), findsOneWidget);
+    expect(find.text('Drop in any data file'), findsOneWidget);
     await tester.tap(find.text('Next'));
     await settle(tester);
     expect(find.text('See what changed, and why'), findsOneWidget);
@@ -120,7 +120,7 @@ void main() {
     // Next launch goes straight to sign in.
     await pumpApp(tester, defaultApi(), loggedIn: false, prefs: MemoryPrefs({...prefs.values}));
     expect(find.text('Welcome back'), findsOneWidget);
-    expect(find.text('Drop in your sales file'), findsNothing);
+    expect(find.text('Drop in any data file'), findsNothing);
   });
 
   testWidgets('summary, insights and answers can be shared', (tester) async {

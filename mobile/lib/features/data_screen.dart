@@ -11,6 +11,8 @@ import '../state/providers.dart';
 import '../widgets/common.dart';
 import '../widgets/dataset_gate.dart';
 import '../widgets/visuals.dart';
+import 'clean_screen.dart';
+import 'combine_screen.dart';
 
 const roleLabels = {
   'date': 'Date',
@@ -235,7 +237,25 @@ class _DataScreenState extends ConsumerState<DataScreen> {
             ),
             const SizedBox(height: 12),
             _SheetCard(busy: _uploading, onTap: _importSheet),
+            if ((ref.watch(datasetsProvider).value?.length ?? 0) >= 2) ...[
+              const SizedBox(height: 12),
+              _ToolCard(
+                icon: Icons.join_inner_rounded,
+                title: 'Combine datasets',
+                subtitle: 'Analyse two or more files together',
+                onTap: () => Navigator.of(context, rootNavigator: true)
+                    .push(MaterialPageRoute<void>(builder: (_) => const CombineScreen())),
+              ),
+            ],
             if (current != null) ...[
+              const SizedBox(height: 12),
+              _ToolCard(
+                icon: Icons.cleaning_services_rounded,
+                title: 'Clean this data',
+                subtitle: 'Fix gaps, duplicates and spellings in your own words',
+                onTap: () => Navigator.of(context, rootNavigator: true)
+                    .push(MaterialPageRoute<void>(builder: (_) => CleanScreen(dataset: current))),
+              ),
               const SizedBox(height: 20),
               ref.watch(profileProvider(current.id)).when(
                     loading: () => const SkeletonCard(chart: false),
@@ -365,6 +385,32 @@ class _SheetCard extends StatelessWidget {
         leading: Icon(Icons.grid_on_rounded, color: p.accent),
         title: Text(busy ? 'Reading your sheet...' : 'Import from Google Sheets'),
         subtitle: const Text('Paste a link shared with anyone'),
+        trailing: Icon(Icons.chevron_right_rounded, color: p.muted),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+/// Entry point for a data tool (combine, clean).
+class _ToolCard extends StatelessWidget {
+  const _ToolCard({required this.icon, required this.title, required this.subtitle, required this.onTap});
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return AppCard(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: ListTile(
+        minTileHeight: kMinTouch,
+        leading: Icon(icon, color: p.accent),
+        title: Text(title),
+        subtitle: Text(subtitle),
         trailing: Icon(Icons.chevron_right_rounded, color: p.muted),
         onTap: onTap,
       ),
